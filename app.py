@@ -103,43 +103,47 @@ def aplicar_colores(row, col1, col2):
     
     return estilos
 
-# --- NUEVA FUNCIÓN PARA CREAR EL PDF ---
+# --- NUEVA FUNCIÓN PARA CREAR EL PDF (ACTUALIZADA) ---
 def generar_pdf_bytes(empresa1, empresa2, df):
     pdf = FPDF()
     pdf.add_page()
     
-    # Título
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "Reporte Comparativo de Inversion", ln=True, align="C")
+    # Título (Actualizado a Helvetica)
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, "Reporte Comparativo de Inversion", align="C", new_x="LMARGIN", new_y="NEXT")
     
     # Subtítulo
-    pdf.set_font("Arial", "", 12)
-    pdf.cell(0, 10, f"Analisis: {empresa1} vs {empresa2}", ln=True, align="C")
+    pdf.set_font("Helvetica", "", 12)
+    pdf.cell(0, 10, f"Analisis: {empresa1} vs {empresa2}", align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(5)
     
     # Cabeceras de la tabla
-    pdf.set_font("Arial", "B", 10)
-    anchos = [65, 60, 60] # Ancho de las 3 columnas
+    pdf.set_font("Helvetica", "B", 10)
+    anchos = [65, 60, 60] 
     columnas = list(df.columns)
     
     for i in range(3):
-        # Evitamos caracteres especiales como tildes para el PDF básico
         texto_col = str(columnas[i]).encode('latin-1', 'replace').decode('latin-1')
         pdf.cell(anchos[i], 10, texto_col, border=1, align="C")
     pdf.ln()
     
     # Datos de la tabla
-    pdf.set_font("Arial", "", 10)
+    pdf.set_font("Helvetica", "", 10)
     for index, row in df.iterrows():
         for i, item in enumerate(row):
-            # Cambiamos el símbolo € por 'EUR' porque FPDF básico no soporta el símbolo del Euro
             texto_celda = str(item).replace('€', 'EUR')
             texto_celda = texto_celda.encode('latin-1', 'replace').decode('latin-1')
             pdf.cell(anchos[i], 10, texto_celda, border=1, align="C")
         pdf.ln()
+        
+    # --- TEXTO LEGAL PARA EL TUTOR ---
+    pdf.ln(10)
+    pdf.set_font("Helvetica", "I", 8)
+    disclaimer = "Nota Legal: Datos extraidos en tiempo real bajo normativa IFRS provenientes de fuentes oficiales e institucionales del mercado de valores europeo."
+    pdf.multi_cell(0, 5, disclaimer, align="L")
     
-    # Convertir a bytes para la descarga
-    return pdf.output(dest="S").encode('latin-1')
+    # Convertir a bytes para la descarga sin usar encode
+    return bytes(pdf.output())
 
 # --- BOTÓN PRINCIPAL ---
 if st.button("📊 Comparar Entidades y Ver Gráficos"):
