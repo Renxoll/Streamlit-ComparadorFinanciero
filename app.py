@@ -14,8 +14,8 @@ from scipy.optimize import minimize
 
 st.set_page_config(page_title="Comparador Financiero", layout="wide")
 
-st.title("Comparador de Opciones de Inversión")
-st.write("Análisis de rentabilidad y evolución de acciones en tiempo real.")
+st.title("Comparador y Optimizador de Inversión")
+st.write("Análisis de rentabilidad, evaluación de riesgo sistemático (Beta) y optimización de Markowitz.")
 
 # --- BANCOS Y SEGUROS ---
 bancos_europeos = {
@@ -53,12 +53,20 @@ moneda = st.sidebar.radio("Mostrar montos en:", ("Euros (€)", "Dólares ($)"))
 tasa_conversion = eur_usd_rate if moneda == "Dólares ($)" else 1.0
 simbolo_moneda = "$" if moneda == "Dólares ($)" else "€"
 
+# Parámetros macroeconómicos del entorno
+TASA_LIBRE_RIESGO = 0.02  # 2% anual
+PRIMA_RIESGO_MERCADO = 0.05  # 5% de prima de riesgo
+
+st.sidebar.divider()
+st.sidebar.subheader("Parámetros del Modelo")
+st.sidebar.info(f"Tasa Libre de Riesgo (Rf): {TASA_LIBRE_RIESGO*100}%\n\nPrima de Mercado (Rm - Rf): {PRIMA_RIESGO_MERCADO*100}%")
+
 if moneda == "Dólares ($)":
     st.sidebar.info(f"Tipo de cambio actual: 1€ = ${eur_usd_rate:.4f}")
 
 empresas = bancos_europeos if sector == "Banca" else seguros_europeos
 
-st.subheader("Seleccione dos entidades para comparar")
+st.subheader("Seleccione dos entidades para comparar y optimizar")
 col_sel1, col_sel2 = st.columns(2)
 
 with col_sel1:
@@ -69,7 +77,15 @@ with col_sel2:
 
 def obtener_metricas(ticker):
     info = yf.Ticker(ticker).info
+    beta = info.get('beta', 'N/A')
+    
+    rentabilidad_capm = 'N/A'
+    if isinstance(beta, (int, float)):
+        rentabilidad_capm = TASA_LIBRE_RIESGO + (beta * PRIMA_RIESGO_MERCADO)
+        
     return {
+        "Beta (Riesgo Sistemático)": beta,
+        "Rentabilidad Esperada (CAPM)": rentabilidad_capm,
         "ROE (Rentabilidad Financiera)": info.get('returnOnEquity', 'N/A'),
         "ROA (Rentabilidad Económica)": info.get('returnOnAssets', 'N/A'),
         "Margen Operativo": info.get('operatingMargins', 'N/A'),
@@ -77,8 +93,46 @@ def obtener_metricas(ticker):
         "Ingresos Totales": info.get('totalRevenue', 'N/A')
     }
 
+def optimizar_markowitz(ticker1, ticker2, ret_capm1, ret_capm2):
+    # Descargar datos históricos de 5 años para covarianzas
+    data1 = yf.Ticker(ticker1).history(period="5y")['Close']
+    data2 = yf.Ticker(ticker2).history(period="5y")['Close']
+    df_precios = pd.DataFrame({ticker1: data1, ticker2: data2}).dropna()
+    
+    if df_precios.empty:
+        return None
+        
+    # Retornos logarítmicos diarios y covarianza anualizada
+    retornos = np.log(df_precios / df_precios.shift(1)).dropna()
+    cov_matrix = retornos.cov() * 252
+    
+    mu = np.array([ret_capm1, ret_capm2])
+    
+    # Función a minimizar: Ratio de Sharpe negativo
+    def neg_sharpe(pesos):
+        retorno_portafolio = np.sum(pesos * mu)
+        volatilidad_portafolio = np.sqrt(np.dot(pesos.T, np.dot(cov_matrix, pesos)))
+        return -(retorno_portafolio - TASA_LIBRE_RIESGO) / volatilidad_portafolio
+
+    restricciones = ({'type': 'eq', 'fun': lambda w: np.sum(w) - 1})
+    limites = ((0, 1), (0, 1)) # Posiciones largas únicamente
+    pesos_iniciales = [0.5, 0.5]
+    
+    resultado = minimize(neg_sharpe, pesos_iniciales, method='SLSQP', bounds=limites, constraints=restricciones)
+    
+    if resultado.success:
+        w1, w2 = resultado.x
+        retorno_opt = np.sum(resultado.x * mu)
+        volatilidad_opt = np.sqrt(np.dot(resultado.x.T, np.dot(cov_matrix, resultado.x)))
+        sharpe_opt = (retorno_opt - TASA_LIBRE_RIESGO) / volatilidad_opt
+        return {"w1": w1, "w2": w2, "ret": retorno_opt, "vol": volatilidad_opt, "sharpe": sharpe_opt}
+    return None
+
 def formatear_porcentaje(valor):
     return f"{valor * 100:.2f}%" if isinstance(valor, (int, float)) else "N/A"
+
+def formatear_beta(valor):
+    return f"{valor:.2f}" if isinstance(valor, (int, float)) else "N/A"
 
 def formatear_moneda(valor, tasa, simbolo):
     return f"{simbolo} {(valor * tasa):,.0f}".replace(',', '.') if isinstance(valor, (int, float)) else "N/A"
@@ -95,6 +149,12 @@ def aplicar_colores(row, col1, col2):
         v1 = float(val1_str.replace('%', '')) if '%' in val1_str else float(val1_str.replace('€', '').replace('$', '').replace('.', '').strip())
         v2 = float(val2_str.replace('%', '')) if '%' in val2_str else float(val2_str.replace('€', '').replace('$', '').replace('.', '').strip())
         
+        # Para la Beta, el ganador no es el mayor, sino el más cercano a 1 (Perfil Moderado)
+        if "Beta" in str(row["Indicador / Rubro"]):
+            dist_v1 = abs(v1 - 1.0)
+            dist_v2 = abs(v2 - 1.0)
+            v1, v2 = dist_v2, dist_v1 # Invertimos para que la lógica de menor distancia gane
+            
         color_ganador = 'background-color: rgba(39, 174, 96, 0.4); font-weight: bold; color: white;'
         color_perdedor = 'background-color: rgba(231, 76, 60, 0.4); color: white;'
         
@@ -112,21 +172,17 @@ def aplicar_colores(row, col1, col2):
     
     return estilos
 
-# --- NUEVA FUNCIÓN PARA CREAR EL PDF (ACTUALIZADA) ---
-def generar_pdf_bytes(empresa1, empresa2, df):
+def generar_pdf_bytes(empresa1, empresa2, df, markowitz=None):
     pdf = FPDF()
     pdf.add_page()
     
-    # Título (Actualizado a Helvetica)
     pdf.set_font("Helvetica", "B", 16)
     pdf.cell(0, 10, "Reporte Comparativo de Inversion", align="C", new_x="LMARGIN", new_y="NEXT")
     
-    # Subtítulo
     pdf.set_font("Helvetica", "", 12)
     pdf.cell(0, 10, f"Analisis: {empresa1} vs {empresa2}", align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(5)
     
-    # Cabeceras de la tabla
     pdf.set_font("Helvetica", "B", 10)
     anchos = [65, 60, 60] 
     columnas = list(df.columns)
@@ -136,7 +192,6 @@ def generar_pdf_bytes(empresa1, empresa2, df):
         pdf.cell(anchos[i], 10, texto_col, border=1, align="C")
     pdf.ln()
     
-    # Datos de la tabla
     pdf.set_font("Helvetica", "", 10)
     for index, row in df.iterrows():
         for i, item in enumerate(row):
@@ -145,27 +200,38 @@ def generar_pdf_bytes(empresa1, empresa2, df):
             pdf.cell(anchos[i], 10, texto_celda, border=1, align="C")
         pdf.ln()
         
-    # --- TEXTO LEGAL PARA EL TUTOR ---
+    if markowitz:
+        pdf.ln(10)
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.cell(0, 10, "Optimizacion de Cartera (Frontera Eficiente Markowitz)", align="L", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(0, 8, f"Asignacion Optima {empresa1}: {markowitz['w1']*100:.2f}%", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 8, f"Asignacion Optima {empresa2}: {markowitz['w2']*100:.2f}%", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 8, f"Rentabilidad Esperada Conjunta (CAPM): {markowitz['ret']*100:.2f}%", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 8, f"Riesgo de Cartera (Volatilidad Anualizada): {markowitz['vol']*100:.2f}%", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 8, f"Ratio de Sharpe Maximizado: {markowitz['sharpe']:.4f}", new_x="LMARGIN", new_y="NEXT")
+        
     pdf.ln(10)
     pdf.set_font("Helvetica", "I", 8)
     disclaimer = "Nota Legal: Datos extraidos en tiempo real bajo normativa IFRS provenientes de fuentes oficiales e institucionales del mercado de valores europeo."
     pdf.multi_cell(0, 5, disclaimer, align="L")
     
-    # Convertir a bytes para la descarga sin usar encode
     return bytes(pdf.output())
 
 # --- BOTÓN PRINCIPAL ---
-if st.button("📊 Comparar Entidades y Ver Gráficos"):
+if st.button("📊 Comparar y Optimizar Cartera"):
     if empresa_1 == empresa_2:
         st.warning("⚠️ Por favor selecciona dos empresas distintas para comparar.")
     else:
-        with st.spinner('Procesando datos financieros y gráficas de bolsa...'):
+        with st.spinner('Procesando datos financieros, CAPM y optimizando Markowitz...'):
             datos_e1 = obtener_metricas(empresas[empresa_1])
             datos_e2 = obtener_metricas(empresas[empresa_2])
 
             df_comparativo = pd.DataFrame({
                 "Indicador / Rubro": list(datos_e1.keys()),
                 empresa_1: [
+                    formatear_beta(datos_e1["Beta (Riesgo Sistemático)"]),
+                    formatear_porcentaje(datos_e1["Rentabilidad Esperada (CAPM)"]),
                     formatear_porcentaje(datos_e1["ROE (Rentabilidad Financiera)"]),
                     formatear_porcentaje(datos_e1["ROA (Rentabilidad Económica)"]),
                     formatear_porcentaje(datos_e1["Margen Operativo"]),
@@ -173,6 +239,8 @@ if st.button("📊 Comparar Entidades y Ver Gráficos"):
                     formatear_moneda(datos_e1["Ingresos Totales"], tasa_conversion, simbolo_moneda)
                 ],
                 empresa_2: [
+                    formatear_beta(datos_e2["Beta (Riesgo Sistemático)"]),
+                    formatear_porcentaje(datos_e2["Rentabilidad Esperada (CAPM)"]),
                     formatear_porcentaje(datos_e2["ROE (Rentabilidad Financiera)"]),
                     formatear_porcentaje(datos_e2["ROA (Rentabilidad Económica)"]),
                     formatear_porcentaje(datos_e2["Margen Operativo"]),
@@ -181,9 +249,17 @@ if st.button("📊 Comparar Entidades y Ver Gráficos"):
                 ]
             })
             
+            # Ejecutar Markowitz si hay datos CAPM válidos
+            markowitz_res = None
+            if isinstance(datos_e1["Rentabilidad Esperada (CAPM)"], float) and isinstance(datos_e2["Rentabilidad Esperada (CAPM)"]):
+                ticker1 = empresas[empresa_1]
+                ticker2 = empresas[empresa_2]
+                markowitz_res = optimizar_markowitz(ticker1, ticker2, datos_e1["Rentabilidad Esperada (CAPM)"], datos_e2["Rentabilidad Esperada (CAPM)"])
+            
             st.session_state.df_actual = df_comparativo
             st.session_state.empresa_1_actual = empresa_1
             st.session_state.empresa_2_actual = empresa_2
+            st.session_state.markowitz_actual = markowitz_res
 
             hist_1 = yf.Ticker(empresas[empresa_1]).history(period="6mo")['Close']
             hist_2 = yf.Ticker(empresas[empresa_2]).history(period="6mo")['Close']
@@ -194,10 +270,9 @@ if st.button("📊 Comparar Entidades y Ver Gráficos"):
             })
 
 if 'df_actual' in st.session_state:
-    st.success("¡Análisis comparativo generado con éxito!")
+    st.success("¡Análisis y optimización generados con éxito!")
     
-    # --- BOTÓN DE DESCARGA PDF ---
-    pdf_bytes = generar_pdf_bytes(st.session_state.empresa_1_actual, st.session_state.empresa_2_actual, st.session_state.df_actual)
+    pdf_bytes = generar_pdf_bytes(st.session_state.empresa_1_actual, st.session_state.empresa_2_actual, st.session_state.df_actual, st.session_state.markowitz_actual)
     
     col_vacia, col_btn = st.columns([3, 1])
     with col_btn:
@@ -214,5 +289,17 @@ if 'df_actual' in st.session_state:
     )
     st.dataframe(df_estilizado, hide_index=True, use_container_width=True)
     
+    if st.session_state.markowitz_actual:
+        st.subheader("🎯 Optimización de Cartera (Markowitz)")
+        mw = st.session_state.markowitz_actual
+        col1, col2, col3 = st.columns(3)
+        col1.metric(f"Peso Óptimo {st.session_state.empresa_1_actual}", f"{mw['w1']*100:.2f}%")
+        col2.metric(f"Peso Óptimo {st.session_state.empresa_2_actual}", f"{mw['w2']*100:.2f}%")
+        col3.metric("Ratio de Sharpe", f"{mw['sharpe']:.4f}")
+        
+        col4, col5 = st.columns(2)
+        col4.info(f"**Rentabilidad Esperada Conjunta:** {mw['ret']*100:.2f}%")
+        col5.warning(f"**Volatilidad (Riesgo Estimado):** {mw['vol']*100:.2f}%")
+        
     st.subheader(f"Evolución del Precio de la Acción ({simbolo_moneda}) - Últimos 6 meses")
     st.line_chart(st.session_state.df_hist)
