@@ -1,7 +1,16 @@
+import os
+import certifi
+
+# Configurar certificados de seguridad ANTES de importar yfinance
+os.environ["CURL_CA_BUNDLE"] = certifi.where()
+os.environ["SSL_CERT_FILE"] = certifi.where()
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-from fpdf import FPDF  
+import numpy as np
+from fpdf import FPDF
+from scipy.optimize import minimize
 
 st.set_page_config(page_title="Comparador Financiero", layout="wide")
 
