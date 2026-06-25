@@ -251,7 +251,7 @@ if st.button("📊 Comparar y Optimizar Cartera"):
             
             # Ejecutar Markowitz si hay datos CAPM válidos
             markowitz_res = None
-            if isinstance(datos_e1["Rentabilidad Esperada (CAPM)"], float) and isinstance(datos_e2["Rentabilidad Esperada (CAPM)"]):
+            if isinstance(datos_e1["Rentabilidad Esperada (CAPM)"], float) and isinstance(datos_e2["Rentabilidad Esperada (CAPM)"], float):             
                 ticker1 = empresas[empresa_1]
                 ticker2 = empresas[empresa_2]
                 markowitz_res = optimizar_markowitz(ticker1, ticker2, datos_e1["Rentabilidad Esperada (CAPM)"], datos_e2["Rentabilidad Esperada (CAPM)"])
