@@ -12,294 +12,317 @@ import numpy as np
 from fpdf import FPDF
 from scipy.optimize import minimize
 
-st.set_page_config(page_title="Comparador Financiero", layout="wide")
+st.set_page_config(page_title="TFM - Carteras e Interfaz Inversor", layout="wide")
 
-st.title("Comparador y Optimizador de Inversión")
-st.write("Análisis de rentabilidad, evaluación de riesgo sistemático (Beta) y optimización de Markowitz.")
+st.title("Sistema de Recomendación y Optimización de Inversión (TFM)")
+st.caption("Máster Universitario en Ciencias Actuariales y Financieras (MUCAF) - Universidad de León")
 
-# --- BANCOS Y SEGUROS ---
-bancos_europeos = {
-    "Banco Santander (España)": "SAN.MC",
-    "BBVA (España)": "BBVA.MC",
-    "BNP Paribas (Francia)": "BNP.PA",
-    "Société Générale (Francia)": "GLE.PA",
-    "Deutsche Bank (Alemania)": "DBK.DE",
-    "Commerzbank (Alemania)": "CBK.DE",
-    "Intesa Sanpaolo (Italia)": "ISP.MI",
-    "UniCredit (Italia)": "UCG.MI",
-    "ING Group (Países Bajos)": "INGA.AS"
-}
+# --- 1. UNIVERSO CERRADO DEL TFM (Solo Nombres y Tickers) ---
+UNIVERSO_TFM = [
+    {"Sector": "Banco", "Empresa": "Banco Santander", "Ticker": "SAN.MC", "Producto": "Acción ordinaria - entidad bancaria"},
+    {"Sector": "Banco", "Empresa": "BNP Paribas", "Ticker": "BNP.PA", "Producto": "Acción ordinaria - entidad bancaria"},
+    {"Sector": "Banco", "Empresa": "ING Groep", "Ticker": "INGA.AS", "Producto": "Acción ordinaria - entidad bancaria"},
+    {"Sector": "Seguros", "Empresa": "Allianz SE", "Ticker": "ALV.DE", "Producto": "Acción ordinaria - entidad aseguradora"},
+    {"Sector": "Seguros", "Empresa": "AXA SA", "Ticker": "CS.PA", "Producto": "Acción ordinaria - entidad aseguradora"},
+    {"Sector": "Seguros", "Empresa": "Mapfre SA", "Ticker": "MAP.MC", "Producto": "Acción ordinaria - entidad aseguradora"},
+    {"Sector": "Seguros", "Empresa": "Assicurazioni Generali", "Ticker": "G.MI", "Producto": "Acción ordinaria - entidad aseguradora"}
+]
 
-seguros_europeos = {
-    "Allianz (Alemania)": "ALV.DE",
-    "AXA (Francia)": "CS.PA",
-    "Mapfre (España)": "MAP.MC",
-    "Generali (Italia)": "G.MI"
-}
+# Inicialización de memoria de sesión
+if 'perfil_calc' not in st.session_state: st.session_state.perfil_calc = "Moderado"
+if 'puntuacion_test' not in st.session_state: st.session_state.puntuacion_test = 18
 
-# --- BARRA LATERAL Y TIPO DE CAMBIO ---
-st.sidebar.header("Configuración de Búsqueda")
-sector = st.sidebar.radio("Sectores disponibles:", ("Banca", "Seguros"))
-
-st.sidebar.divider()
-st.sidebar.subheader("💱 Divisa de Visualización")
-
-try:
-    eur_usd_rate = yf.Ticker("EURUSD=X").history(period="1d")['Close'].iloc[-1]
-except:
-    eur_usd_rate = 1.09
-
-moneda = st.sidebar.radio("Mostrar montos en:", ("Euros (€)", "Dólares ($)"))
-tasa_conversion = eur_usd_rate if moneda == "Dólares ($)" else 1.0
-simbolo_moneda = "$" if moneda == "Dólares ($)" else "€"
-
-# Parámetros macroeconómicos del entorno
-TASA_LIBRE_RIESGO = 0.02  # 2% anual
-PRIMA_RIESGO_MERCADO = 0.05  # 5% de prima de riesgo
-
-st.sidebar.divider()
-st.sidebar.subheader("Parámetros del Modelo")
-st.sidebar.info(f"Tasa Libre de Riesgo (Rf): {TASA_LIBRE_RIESGO*100}%\n\nPrima de Mercado (Rm - Rf): {PRIMA_RIESGO_MERCADO*100}%")
-
-if moneda == "Dólares ($)":
-    st.sidebar.info(f"Tipo de cambio actual: 1€ = ${eur_usd_rate:.4f}")
-
-empresas = bancos_europeos if sector == "Banca" else seguros_europeos
-
-st.subheader("Seleccione dos entidades para comparar y optimizar")
-col_sel1, col_sel2 = st.columns(2)
-
-with col_sel1:
-    empresa_1 = st.selectbox("Entidad 1:", list(empresas.keys()), index=0)
-
-with col_sel2:
-    empresa_2 = st.selectbox("Entidad 2:", list(empresas.keys()), index=1)
-
-def obtener_metricas(ticker):
-    info = yf.Ticker(ticker).info
-    beta = info.get('beta', 'N/A')
+# --- MOTOR DE EXTRACCIÓN Y CÁLCULO DINÁMICO (YAHOO FINANCE) ---
+@st.cache_data(ttl=3600, show_spinner="Descargando datos históricos y procesando matrices de covarianza...")
+def procesar_universo(rf, prima_mercado):
+    filas = []
     
-    rentabilidad_capm = 'N/A'
-    if isinstance(beta, (int, float)):
-        rentabilidad_capm = TASA_LIBRE_RIESGO + (beta * PRIMA_RIESGO_MERCADO)
+    # 1. Descargar el Benchmark (Euro Stoxx 50) para el cálculo de la Beta
+    df_bench = yf.Ticker("^STOXX50E").history(period="5y")['Close']
+    ret_bench = df_bench.pct_change().dropna()
+    
+    for item in UNIVERSO_TFM:
+        ticker = item["Ticker"]
         
-    return {
-        "Beta (Riesgo Sistemático)": beta,
-        "Rentabilidad Esperada (CAPM)": rentabilidad_capm,
-        "ROE (Rentabilidad Financiera)": info.get('returnOnEquity', 'N/A'),
-        "ROA (Rentabilidad Económica)": info.get('returnOnAssets', 'N/A'),
-        "Margen Operativo": info.get('operatingMargins', 'N/A'),
-        "Utilidad Neta": info.get('netIncomeToCommon', 'N/A'),
-        "Ingresos Totales": info.get('totalRevenue', 'N/A')
-    }
-
-def optimizar_markowitz(ticker1, ticker2, ret_capm1, ret_capm2):
-    # Descargar datos históricos de 5 años para covarianzas
-    data1 = yf.Ticker(ticker1).history(period="5y")['Close']
-    data2 = yf.Ticker(ticker2).history(period="5y")['Close']
-    df_precios = pd.DataFrame({ticker1: data1, ticker2: data2}).dropna()
-    
-    if df_precios.empty:
-        return None
+        # 2. Descargar activo individual
+        df_asset = yf.Ticker(ticker).history(period="5y")['Close']
+        ret_asset = df_asset.pct_change().dropna()
         
-    # Retornos logarítmicos diarios y covarianza anualizada
-    retornos = np.log(df_precios / df_precios.shift(1)).dropna()
-    cov_matrix = retornos.cov() * 252
-    
-    mu = np.array([ret_capm1, ret_capm2])
-    
-    # Función a minimizar: Ratio de Sharpe negativo
-    def neg_sharpe(pesos):
-        retorno_portafolio = np.sum(pesos * mu)
-        volatilidad_portafolio = np.sqrt(np.dot(pesos.T, np.dot(cov_matrix, pesos)))
-        return -(retorno_portafolio - TASA_LIBRE_RIESGO) / volatilidad_portafolio
-
-    restricciones = ({'type': 'eq', 'fun': lambda w: np.sum(w) - 1})
-    limites = ((0, 1), (0, 1)) # Posiciones largas únicamente
-    pesos_iniciales = [0.5, 0.5]
-    
-    resultado = minimize(neg_sharpe, pesos_iniciales, method='SLSQP', bounds=limites, constraints=restricciones)
-    
-    if resultado.success:
-        w1, w2 = resultado.x
-        retorno_opt = np.sum(resultado.x * mu)
-        volatilidad_opt = np.sqrt(np.dot(resultado.x.T, np.dot(cov_matrix, resultado.x)))
-        sharpe_opt = (retorno_opt - TASA_LIBRE_RIESGO) / volatilidad_opt
-        return {"w1": w1, "w2": w2, "ret": retorno_opt, "vol": volatilidad_opt, "sharpe": sharpe_opt}
-    return None
-
-def formatear_porcentaje(valor):
-    return f"{valor * 100:.2f}%" if isinstance(valor, (int, float)) else "N/A"
-
-def formatear_beta(valor):
-    return f"{valor:.2f}" if isinstance(valor, (int, float)) else "N/A"
-
-def formatear_moneda(valor, tasa, simbolo):
-    return f"{simbolo} {(valor * tasa):,.0f}".replace(',', '.') if isinstance(valor, (int, float)) else "N/A"
-
-def aplicar_colores(row, col1, col2):
-    estilos = [''] * len(row)
-    val1_str = str(row[col1])
-    val2_str = str(row[col2])
-    
-    if val1_str == 'N/A' or val2_str == 'N/A':
-        return estilos
+        # 3. Alinear fechas (Inner Join temporal)
+        df_aligned = pd.concat([ret_asset, ret_bench], axis=1).dropna()
+        df_aligned.columns = ['Asset', 'Bench']
         
-    try:
-        v1 = float(val1_str.replace('%', '')) if '%' in val1_str else float(val1_str.replace('€', '').replace('$', '').replace('.', '').strip())
-        v2 = float(val2_str.replace('%', '')) if '%' in val2_str else float(val2_str.replace('€', '').replace('$', '').replace('.', '').strip())
+        # 4. Cálculos Actuariales Reales
+        vol_diaria = df_aligned['Asset'].std()
+        vol_anual = vol_diaria * np.sqrt(252)
         
-        # Para la Beta, el ganador no es el mayor, sino el más cercano a 1 (Perfil Moderado)
-        if "Beta" in str(row["Indicador / Rubro"]):
-            dist_v1 = abs(v1 - 1.0)
-            dist_v2 = abs(v2 - 1.0)
-            v1, v2 = dist_v2, dist_v1 # Invertimos para que la lógica de menor distancia gane
+        # Matriz de covarianzas para hallar la Beta matemática
+        cov_matrix = df_aligned.cov()
+        cov_i_m = cov_matrix.iloc[0, 1]
+        var_m = cov_matrix.iloc[1, 1]
+        
+        beta = cov_i_m / var_m if var_m != 0 else 1.0
+        
+        # 5. Cálculos derivados
+        dist_beta = abs(beta - 1.0)
+        capm = rf + (beta * prima_mercado)
+        sharpe = (capm - rf) / vol_anual
+        score_mod = dist_beta + vol_anual
+
+        filas.append({
+            "Perfil objetivo": "Moderado",
+            "Sector": item["Sector"],
+            "Empresa": item["Empresa"],
+            "Ticker Yahoo": ticker,
+            "Producto financiero": item["Producto"],
+            "Beta": beta,
+            "Distancia a β=1": dist_beta,
+            "Volatilidad diaria 5 años": vol_diaria,
+            "Volatilidad anual 5 años": vol_anual,
+            "Rentabilidad CAPM": capm,
+            "Sharpe individual CAPM": sharpe,
+            "Score moderado": score_mod,
+            "Elegible perfil moderado": "Sí" if (beta >= 0.75 and beta <= 1.25) else "No"
+        })
+    return pd.DataFrame(filas)
+
+# --- LAS 6 PESTAÑAS EXACTAS DEL EXCEL ---
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "1. Datos Inversor", 
+    "2. Cuestionario", 
+    "3. Productos Perfil", 
+    "4. Cartera Markowitz", 
+    "5. Gráficos", 
+    "6. Resumen Interfaz"
+])
+
+# ==========================================
+# HOJA 1: DATOS DEL INVERSOR
+# ==========================================
+with tab1:
+    st.header("HOJA 1: DATOS DEL INVERSOR")
+    col1, col_space, col2 = st.columns([1.2, 0.2, 1.6])
+    
+    with col1:
+        st.subheader("Parámetros de Entrada")
+        nombre = st.text_input("Nombre:", value="Jimena Triguero")
+        edad = st.number_input("Edad:", min_value=18, max_value=100, value=34)
+        importe = st.number_input("Importe a invertir (€):", min_value=1000, value=10000, step=500)
+        plazo = st.number_input("Plazo (años):", min_value=1, max_value=30, value=5)
+        rf = st.number_input("Tasa libre de riesgo anual (Rf):", value=0.0200, format="%.4f")
+        prima = st.number_input("Prima de riesgo de mercado (Rm - Rf):", value=0.0550, format="%.4f")
+        
+        st.info(f"**Perfil calculado actual:** {st.session_state.perfil_calc}")
+        
+    with col2:
+        st.subheader("Diccionario Metodológico (TFM)")
+        df_dicc = pd.DataFrame({
+            "Campo": ["Nombre", "Edad", "Importe", "Plazo", "Rf", "Perfil"],
+            "Uso en la interfaz": ["Identificación del usuario", "Apoyo al perfil inversor", "Capital inicial", "Horizonte temporal", "Activo libre de riesgo", "Resultado cuestionario"],
+            "Relación con el TFM": ["Pantalla inicial", "MiFID II / idoneidad", "Proyección de valor futuro", "Selección de activos", "Ratio de Sharpe", "Recomendación de cartera"]
+        })
+        st.dataframe(df_dicc, hide_index=True, use_container_width=True)
+
+# Ejecutar el motor de cálculo y guardar en variable
+df_universo = procesar_universo(rf, prima)
+
+# ==========================================
+# HOJA 2: CUESTIONARIO MiFID II
+# ==========================================
+with tab2:
+    st.header("HOJA 2: CUESTIONARIO DE PERFIL INVERSOR")
+    st.write("Seleccione el nivel (1 al 5) para cada criterio normativo:")
+    
+    c1 = st.slider("1. ¿Cuál es su horizonte temporal? (1: ≤1 año | 3: 2-5 años | 5: >8 años)", 1, 5, 3)
+    c2 = st.slider("2. ¿Cómo reaccionaría ante una caída del 10%? (1: Vendería | 3: Mantendría | 5: Compraría más)", 1, 5, 3)
+    c3 = st.slider("3. % de pérdida temporal aceptada (1: 0-2% | 3: 5-10% | 5: >20%)", 1, 5, 3)
+    c4 = st.slider("4. Experiencia en mercados financieros (1: Nula | 3: Media | 5: Muy alta)", 1, 5, 3)
+    c5 = st.slider("5. Prioridad para usted de la liquidez (1: Muy alta | 3: Media | 5: Muy baja)", 1, 5, 3)
+    c6 = st.slider("6. Objetivo que busca (1: Preservar capital | 3: Equilibrio | 5: Máximo crecimiento)", 1, 5, 3)
+    
+    total_puntos = c1 + c2 + c3 + c4 + c5 + c6
+    st.session_state.puntuacion_test = total_puntos
+    
+    if total_puntos <= 13: p_calc = "Conservador"
+    elif total_puntos <= 22: p_calc = "Moderado"
+    else: p_calc = "Agresivo"
+    
+    st.session_state.perfil_calc = p_calc
+    
+    st.divider()
+    col_res1, col_res2 = st.columns(2)
+    col_res1.metric("Puntuación Total Cuestionario", f"{total_puntos} / 30")
+    col_res2.success(f"Perfil Asignado según baremo: **{p_calc.upper()}**")
+    
+    with st.expander("Ver baremo de puntuación MiFID II"):
+        st.table(pd.DataFrame({
+            "Intervalo": ["6 a 13 puntos", "14 a 22 puntos", "23 a 30 puntos"],
+            "Perfil Normativo": ["Perfil Conservador", "Perfil Moderado", "Perfil Agresivo"]
+        }))
+
+# ==========================================
+# HOJA 3: PRODUCTOS POR PERFIL
+# ==========================================
+with tab3:
+    st.header("HOJA 3: OPCIONES DE EMPRESAS Y PRODUCTOS - BANCOS Y SEGUROS UE")
+    st.caption(f"Filtrado metodológico para horizonte de {plazo} años bajo modelo CAPM con datos reales de mercado.")
+    
+    df_h3 = df_universo.copy()
+    # Formateo visual
+    df_mostrar_h3 = df_h3.copy()
+    for col in ["Beta", "Distancia a β=1"]: df_mostrar_h3[col] = df_mostrar_h3[col].map("{:.4f}".format)
+    for col in ["Volatilidad diaria 5 años", "Volatilidad anual 5 años", "Sharpe individual CAPM", "Score moderado"]: df_mostrar_h3[col] = df_mostrar_h3[col].map("{:.4f}".format)
+    df_mostrar_h3["Rentabilidad CAPM"] = (df_mostrar_h3["Rentabilidad CAPM"] * 100).map("{:.2f}%".format)
+    
+    st.dataframe(df_mostrar_h3, hide_index=True, use_container_width=True)
+
+# ==========================================
+# HOJA 4: CARTERA MARKOWITZ (M1 - M7)
+# ==========================================
+with tab4:
+    st.header("HOJA 4: ANÁLISIS M1-M7 DE EMPRESAS CANDIDATAS")
+    
+    # Selección matemática del ganador
+    bancos_df = df_universo[df_universo["Sector"] == "Banco"]
+    seguros_df = df_universo[df_universo["Sector"] == "Seguros"]
+    
+    mejor_banco = bancos_df.loc[bancos_df["Score moderado"].idxmin()]
+    mejor_seguro = seguros_df.loc[seguros_df["Score moderado"].idxmin()]
+    
+    df_m1_m7 = df_universo.copy()
+    df_m1_m7.insert(0, "Combinación Markowitz", ["M1", "M2", "M3", "M4", "M5", "M6", "M7"])
+    
+    resultados_col = []
+    for idx, row in df_m1_m7.iterrows():
+        if row["Ticker Yahoo"] == mejor_banco["Ticker Yahoo"]: resultados_col.append("Mejor banco")
+        elif row["Ticker Yahoo"] == mejor_seguro["Ticker Yahoo"]: resultados_col.append("Mejor aseguradora")
+        else: resultados_col.append("Candidato moderado")
+    df_m1_m7["Resultado"] = resultados_col
+    
+    df_v4 = df_m1_m7[["Combinación Markowitz", "Perfil objetivo", "Sector", "Empresa", "Ticker Yahoo", "Producto financiero", "Beta", "Volatilidad anual 5 años", "Rentabilidad CAPM", "Sharpe individual CAPM", "Distancia a β=1", "Score moderado", "Resultado"]]
+    st.dataframe(df_v4, hide_index=True, use_container_width=True)
+    
+    st.divider()
+    st.subheader("Simulación de Cruce entre Ganadores Sectoriales")
+    col_gb, col_gs = st.columns(2)
+    col_gb.success(f"🏆 **Mejor Banco:** {mejor_banco['Empresa']} ({mejor_banco['Ticker Yahoo']})")
+    col_gs.success(f"🏆 **Mejor Aseguradora:** {mejor_seguro['Empresa']} ({mejor_seguro['Ticker Yahoo']})")
+    
+    w_b = st.slider("Peso asignado al Banco (%)", 0, 100, 50, step=5) / 100.0
+    w_s = 1.0 - w_b
+    
+    # Descargar serie para cruce dinámico de covarianza de la cartera óptima
+    with st.spinner("Calculando covarianza histórica exacta del cruce seleccionado..."):
+        serie_banco = yf.Ticker(mejor_banco["Ticker Yahoo"]).history(period="5y")['Close'].pct_change().dropna()
+        serie_seguro = yf.Ticker(mejor_seguro["Ticker Yahoo"]).history(period="5y")['Close'].pct_change().dropna()
+        
+        df_cruce = pd.concat([serie_banco, serie_seguro], axis=1).dropna()
+        cov_bs = df_cruce.cov().iloc[0, 1] * 252 # Covarianza anualizada
+    
+    beta_comb = (w_b * mejor_banco["Beta"]) + (w_s * mejor_seguro["Beta"])
+    ret_comb = (w_b * mejor_banco["Rentabilidad CAPM"]) + (w_s * mejor_seguro["Rentabilidad CAPM"])
+    
+    vol_comb = np.sqrt((w_b**2 * mejor_banco["Volatilidad anual 5 años"]**2) + (w_s**2 * mejor_seguro["Volatilidad anual 5 años"]**2) + (2 * w_b * w_s * cov_bs))
+    sharpe_comb = (ret_comb - rf) / vol_comb
+    
+    c_m1, c_m2, c_m3, c_m4 = st.columns(4)
+    c_m1.metric("Distribución", f"{int(w_b*100)}% / {int(w_s*100)}%")
+    c_m2.metric("Beta Conjunta", f"{beta_comb:.4f}")
+    c_m3.metric("Rentabilidad CAPM", f"{ret_comb*100:.2f}%")
+    c_m4.metric("Sharpe Conjunto", f"{sharpe_comb:.4f}")
+
+# ==========================================
+# HOJA 5: GRÁFICOS Y PROYECCIÓN
+# ==========================================
+with tab5:
+    st.header("HOJA 5: VISUALIZACIÓN DE RESULTADOS")
+    
+    anios = list(range(int(plazo) + 1))
+    proy_b = [importe * ((1 + mejor_banco["Rentabilidad CAPM"])**t) for t in anios]
+    proy_s = [importe * ((1 + mejor_seguro["Rentabilidad CAPM"])**t) for t in anios]
+    
+    ret_50_50 = (0.5 * mejor_banco["Rentabilidad CAPM"]) + (0.5 * mejor_seguro["Rentabilidad CAPM"])
+    proy_c = [importe * ((1 + ret_50_50)**t) for t in anios]
+    
+    df_proyeccion = pd.DataFrame({
+        "Año": anios,
+        f"{mejor_banco['Empresa']}": proy_b,
+        f"{mejor_seguro['Empresa']}": proy_s,
+        "Cartera Referencial (50% / 50%)": proy_c
+    })
+    
+    col_tabla_proy, col_indicadores = st.columns([1.3, 1.7])
+    
+    with col_tabla_proy:
+        st.subheader("Proyección de Capital (€)")
+        st.dataframe(df_proyeccion.style.format({col: "{:,.2f} €" for col in df_proyeccion.columns if col != "Año"}), hide_index=True)
+        
+    with col_indicadores:
+        st.subheader("Tabla de Resumen Comparativo")
+        df_ind = pd.DataFrame({
+            "Indicador": ["Empresa / producto", "Sector", "Beta", "Volatilidad anual", "Rentabilidad CAPM", "Sharpe individual"],
+            "Banco seleccionado": [mejor_banco["Empresa"], "Banco", f"{mejor_banco['Beta']:.4f}", f"{mejor_banco['Volatilidad anual 5 años']:.4f}", f"{mejor_banco['Rentabilidad CAPM']*100:.2f}%", f"{mejor_banco['Sharpe individual CAPM']:.4f}"],
+            "Aseguradora seleccionada": [mejor_seguro["Empresa"], "Seguros", f"{mejor_seguro['Beta']:.4f}", f"{mejor_seguro['Volatilidad anual 5 años']:.4f}", f"{mejor_seguro['Rentabilidad CAPM']*100:.2f}%", f"{mejor_seguro['Sharpe individual CAPM']:.4f}"],
+            "Referencia conjunta (50/50)": [f"{mejor_banco['Empresa']} + {mejor_seguro['Empresa']}", "Banco + Seguros", f"{(mejor_banco['Beta']+mejor_seguro['Beta'])/2:.4f}", f"{vol_comb:.4f}", f"{ret_50_50*100:.2f}%", f"{(ret_50_50-rf)/vol_comb:.4f}"],
+            "Observación": ["Selección final por sector", "Universo moderado UE", "Cercana a 1", "Riesgo diversificado", "Modelo CAPM", "Rentabilidad-Riesgo"]
+        })
+        st.dataframe(df_ind, hide_index=True, use_container_width=True)
+
+    st.subheader("Evolución temporal del capital invertido")
+    st.line_chart(df_proyeccion.set_index("Año"))
+
+# ==========================================
+# HOJA 6: RESUMEN FINAL INTERFAZ
+# ==========================================
+with tab6:
+    st.header("HOJA 6: RESUMEN FINAL DEL SISTEMA DE RECOMENDACIÓN")
+    
+    df_resumen_card = pd.DataFrame({
+        "Concepto Metodológico": [
+            "Usuario", "Perfil inversor", "Universo analizado", 
+            "Número de empresas candidatas", "Criterio de beta", 
+            "Mejor banco", "Mejor aseguradora", "Modelo de rentabilidad", 
+            "Criterio de selección", "Observación"
+        ],
+        "Valor Asignado": [
+            nombre, st.session_state.perfil_calc, "Bancos y aseguradoras de la Unión Europea",
+            "7", "Beta cercana a 1 (Moderado)",
+            mejor_banco["Empresa"], mejor_seguro["Empresa"], "CAPM",
+            "Menor score moderado por sector", "M1-M7 representan empresas candidatas, no combinaciones de pesos"
+        ]
+    })
+    
+    col_card, col_pdf = st.columns([2, 1])
+    with col_card:
+        st.table(df_resumen_card)
+        
+    with col_pdf:
+        st.write("### Exportación Documental")
+        st.write("Genera el acta oficial de resultados para incorporar como anexo en la memoria del TFM.")
+        
+        def construir_pdf_tfm():
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Helvetica", "B", 15)
+            pdf.cell(0, 10, "UNIVERSIDAD DE LEON - MUCAF", align="C", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "B", 12)
+            pdf.cell(0, 8, "Ficha de Recomendacion - Trabajo Fin de Master", align="C", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(5)
             
-        color_ganador = 'background-color: rgba(39, 174, 96, 0.4); font-weight: bold; color: white;'
-        color_perdedor = 'background-color: rgba(231, 76, 60, 0.4); color: white;'
-        
-        idx_1 = row.index.get_loc(col1)
-        idx_2 = row.index.get_loc(col2)
-        
-        if v1 > v2:
-            estilos[idx_1] = color_ganador
-            estilos[idx_2] = color_perdedor
-        elif v2 > v1:
-            estilos[idx_1] = color_perdedor
-            estilos[idx_2] = color_ganador
-    except Exception:
-        pass
-    
-    return estilos
-
-def generar_pdf_bytes(empresa1, empresa2, df, markowitz=None):
-    pdf = FPDF()
-    pdf.add_page()
-    
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, "Reporte Comparativo de Inversion", align="C", new_x="LMARGIN", new_y="NEXT")
-    
-    pdf.set_font("Helvetica", "", 12)
-    pdf.cell(0, 10, f"Analisis: {empresa1} vs {empresa2}", align="C", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(5)
-    
-    pdf.set_font("Helvetica", "B", 10)
-    anchos = [65, 60, 60] 
-    columnas = list(df.columns)
-    
-    for i in range(3):
-        texto_col = str(columnas[i]).encode('latin-1', 'replace').decode('latin-1')
-        pdf.cell(anchos[i], 10, texto_col, border=1, align="C")
-    pdf.ln()
-    
-    pdf.set_font("Helvetica", "", 10)
-    for index, row in df.iterrows():
-        for i, item in enumerate(row):
-            texto_celda = str(item).replace('€', 'EUR')
-            texto_celda = texto_celda.encode('latin-1', 'replace').decode('latin-1')
-            pdf.cell(anchos[i], 10, texto_celda, border=1, align="C")
-        pdf.ln()
-        
-    if markowitz:
-        pdf.ln(10)
-        pdf.set_font("Helvetica", "B", 12)
-        pdf.cell(0, 10, "Optimizacion de Cartera (Frontera Eficiente Markowitz)", align="L", new_x="LMARGIN", new_y="NEXT")
-        pdf.set_font("Helvetica", "", 10)
-        pdf.cell(0, 8, f"Asignacion Optima {empresa1}: {markowitz['w1']*100:.2f}%", new_x="LMARGIN", new_y="NEXT")
-        pdf.cell(0, 8, f"Asignacion Optima {empresa2}: {markowitz['w2']*100:.2f}%", new_x="LMARGIN", new_y="NEXT")
-        pdf.cell(0, 8, f"Rentabilidad Esperada Conjunta (CAPM): {markowitz['ret']*100:.2f}%", new_x="LMARGIN", new_y="NEXT")
-        pdf.cell(0, 8, f"Riesgo de Cartera (Volatilidad Anualizada): {markowitz['vol']*100:.2f}%", new_x="LMARGIN", new_y="NEXT")
-        pdf.cell(0, 8, f"Ratio de Sharpe Maximizado: {markowitz['sharpe']:.4f}", new_x="LMARGIN", new_y="NEXT")
-        
-    pdf.ln(10)
-    pdf.set_font("Helvetica", "I", 8)
-    disclaimer = "Nota Legal: Datos extraidos en tiempo real bajo normativa IFRS provenientes de fuentes oficiales e institucionales del mercado de valores europeo."
-    pdf.multi_cell(0, 5, disclaimer, align="L")
-    
-    return bytes(pdf.output())
-
-# --- BOTÓN PRINCIPAL ---
-if st.button("📊 Comparar y Optimizar Cartera"):
-    if empresa_1 == empresa_2:
-        st.warning("⚠️ Por favor selecciona dos empresas distintas para comparar.")
-    else:
-        with st.spinner('Procesando datos financieros, CAPM y optimizando Markowitz...'):
-            datos_e1 = obtener_metricas(empresas[empresa_1])
-            datos_e2 = obtener_metricas(empresas[empresa_2])
-
-            df_comparativo = pd.DataFrame({
-                "Indicador / Rubro": list(datos_e1.keys()),
-                empresa_1: [
-                    formatear_beta(datos_e1["Beta (Riesgo Sistemático)"]),
-                    formatear_porcentaje(datos_e1["Rentabilidad Esperada (CAPM)"]),
-                    formatear_porcentaje(datos_e1["ROE (Rentabilidad Financiera)"]),
-                    formatear_porcentaje(datos_e1["ROA (Rentabilidad Económica)"]),
-                    formatear_porcentaje(datos_e1["Margen Operativo"]),
-                    formatear_moneda(datos_e1["Utilidad Neta"], tasa_conversion, simbolo_moneda),
-                    formatear_moneda(datos_e1["Ingresos Totales"], tasa_conversion, simbolo_moneda)
-                ],
-                empresa_2: [
-                    formatear_beta(datos_e2["Beta (Riesgo Sistemático)"]),
-                    formatear_porcentaje(datos_e2["Rentabilidad Esperada (CAPM)"]),
-                    formatear_porcentaje(datos_e2["ROE (Rentabilidad Financiera)"]),
-                    formatear_porcentaje(datos_e2["ROA (Rentabilidad Económica)"]),
-                    formatear_porcentaje(datos_e2["Margen Operativo"]),
-                    formatear_moneda(datos_e2["Utilidad Neta"], tasa_conversion, simbolo_moneda),
-                    formatear_moneda(datos_e2["Ingresos Totales"], tasa_conversion, simbolo_moneda)
-                ]
-            })
+            pdf.set_font("Helvetica", "", 10)
+            for idx, r in df_resumen_card.iterrows():
+                c_texto = str(r['Concepto Metodológico']).encode('latin-1', 'replace').decode('latin-1')
+                v_texto = str(r['Valor Asignado']).encode('latin-1', 'replace').decode('latin-1')
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.cell(75, 8, c_texto, border=1)
+                pdf.set_font("Helvetica", "", 10)
+                pdf.cell(115, 8, v_texto, border=1, new_x="LMARGIN", new_y="NEXT")
             
-            # Ejecutar Markowitz si hay datos CAPM válidos
-            markowitz_res = None
-            if isinstance(datos_e1["Rentabilidad Esperada (CAPM)"], float) and isinstance(datos_e2["Rentabilidad Esperada (CAPM)"], float):             
-                ticker1 = empresas[empresa_1]
-                ticker2 = empresas[empresa_2]
-                markowitz_res = optimizar_markowitz(ticker1, ticker2, datos_e1["Rentabilidad Esperada (CAPM)"], datos_e2["Rentabilidad Esperada (CAPM)"])
-            
-            st.session_state.df_actual = df_comparativo
-            st.session_state.empresa_1_actual = empresa_1
-            st.session_state.empresa_2_actual = empresa_2
-            st.session_state.markowitz_actual = markowitz_res
+            return bytes(pdf.output())
 
-            hist_1 = yf.Ticker(empresas[empresa_1]).history(period="6mo")['Close']
-            hist_2 = yf.Ticker(empresas[empresa_2]).history(period="6mo")['Close']
-            
-            st.session_state.df_hist = pd.DataFrame({
-                empresa_1: hist_1 * tasa_conversion, 
-                empresa_2: hist_2 * tasa_conversion
-            })
-
-if 'df_actual' in st.session_state:
-    st.success("¡Análisis y optimización generados con éxito!")
-    
-    pdf_bytes = generar_pdf_bytes(st.session_state.empresa_1_actual, st.session_state.empresa_2_actual, st.session_state.df_actual, st.session_state.markowitz_actual)
-    
-    col_vacia, col_btn = st.columns([3, 1])
-    with col_btn:
         st.download_button(
-            label="Descargar Reporte en PDF",
-            data=pdf_bytes,
-            file_name=f"Reporte_{st.session_state.empresa_1_actual}_vs_{st.session_state.empresa_2_actual}.pdf",
+            label="📥 Descargar Ficha de Resultados (PDF)",
+            data=construir_pdf_tfm(),
+            file_name="Resumen_Ejecutivo_TFM.pdf",
             mime="application/pdf"
         )
-    
-    df_estilizado = st.session_state.df_actual.style.apply(
-        lambda row: aplicar_colores(row, st.session_state.empresa_1_actual, st.session_state.empresa_2_actual), 
-        axis=1
-    )
-    st.dataframe(df_estilizado, hide_index=True, use_container_width=True)
-    
-    if st.session_state.markowitz_actual:
-        st.subheader("🎯 Optimización de Cartera (Markowitz)")
-        mw = st.session_state.markowitz_actual
-        col1, col2, col3 = st.columns(3)
-        col1.metric(f"Peso Óptimo {st.session_state.empresa_1_actual}", f"{mw['w1']*100:.2f}%")
-        col2.metric(f"Peso Óptimo {st.session_state.empresa_2_actual}", f"{mw['w2']*100:.2f}%")
-        col3.metric("Ratio de Sharpe", f"{mw['sharpe']:.4f}")
-        
-        col4, col5 = st.columns(2)
-        col4.info(f"**Rentabilidad Esperada Conjunta:** {mw['ret']*100:.2f}%")
-        col5.warning(f"**Volatilidad (Riesgo Estimado):** {mw['vol']*100:.2f}%")
-        
-    st.subheader(f"Evolución del Precio de la Acción ({simbolo_moneda}) - Últimos 6 meses")
-    st.line_chart(st.session_state.df_hist)
