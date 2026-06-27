@@ -1,49 +1,60 @@
-# 📊 Comparador y Optimizador de Inversión Financiera (TFM)
+# 📊 Sistema de Recomendación y Optimización de Inversión (TFM)
+**Máster Universitario en Ciencias Actuariales y Financieras (MUCAF) - Universidad de León**
 
-Una aplicación web interactiva desarrollada en Python orientada al análisis financiero, evaluación del riesgo sistemático y optimización de carteras de inversión. Este proyecto aplica normativas de idoneidad (MiFID II) y teorías fundamentales de finanzas cuantitativas para el sector bancario y asegurador europeo.
+Una aplicación web interactiva desarrollada en Python que replica, automatiza y mejora el modelo actuarial diseñado para el Trabajo Fin de Máster. Orientada a la perfilación de riesgo (MiFID II), evaluación del riesgo sistemático y optimización de carteras de inversión centradas en el sector bancario y asegurador de la Unión Europea.
 
-## 🚀 Características Principales
+## 🧠 Arquitectura Lógica del Sistema (Perfilado y Scoring)
 
-La aplicación integra análisis en tiempo real y modelos matemáticos avanzados a través de una interfaz gráfica intuitiva:
+El motor de recomendación se fundamenta en un proceso secuencial de dos fases que conecta la normativa europea con la teoría financiera de carteras:
 
-1. **Análisis Fundamental Automatizado:**
-   - Extracción de datos en tiempo real de Yahoo Finance.
-   - Cálculo y comparación comparativa de ratios clave: ROE, ROA, Margen Operativo, Utilidad Neta e Ingresos Totales.
-   - Conversión de divisas dinámica (EUR/USD) obteniendo el tipo de cambio del mercado al instante.
+**1. Evaluación de Idoneidad (Perfil del Inversor)**
+Se aplica un cuestionario interactivo de 6 variables clave (horizonte, liquidez, experiencia, objetivos, tolerancia y capacidad de pérdida) valoradas en una escala del 1 al 5. El algoritmo procesa la sumatoria total (máximo de 30 puntos):
+- **6 - 13 Puntos:** Perfil **Conservador**
+- **14 - 22 Puntos:** Perfil **Moderado**
+- **23 - 30 Puntos:** Perfil **Agresivo**
 
-2. **Evaluación de Riesgo Sistemático (Beta) y Modelo CAPM:**
-   - Filtrado estricto de activos basado en la Beta ($\beta$) para ajustarse al perfil del inversor (enfocado en el Perfil Moderado, buscando $\beta \approx 1$).
-   - Cálculo automático de la **Rentabilidad Esperada** de cada activo utilizando el Modelo de Valoración de Activos de Capital (CAPM), integrando una tasa libre de riesgo y una prima de mercado parametrizadas.
+**2. Asignación Financiera Dinámica (Filtro por Beta $\beta$)**
+El modelo extrae la sensibilidad histórica del activo frente al Euro Stoxx 50 y aplica reglas estrictas de filtrado y puntuación según el perfil obtenido:
+- **Inversor Conservador:** Selecciona activos refugio ($\beta < 0.95$). El "Score" interno penaliza la suma de Beta y Volatilidad para priorizar la protección del capital.
+- **Inversor Moderado:** Exige activos con un nivel de riesgo similar al mercado ($0.80 \le \beta \le 1.20$). El "Score" matemático minimiza la distancia del activo respecto al mercado: $|\beta - 1| + \sigma$.
+- **Inversor Agresivo:** Filtra activos procíclicos ($\beta > 1.05$). El "Score" recompensa la alta sensibilidad para amplificar retornos en fases expansivas, asumiendo mayor volatilidad.
 
-3. **Optimización de Carteras (Teoría de Markowitz):**
-   - Descarga de históricos de precios de los últimos 5 años para construir la matriz de varianzas-covarianzas de los activos seleccionados.
-   - Algoritmo de optimización (`scipy.optimize`) para calcular la **Frontera Eficiente**.
-   - Asignación porcentual óptima del capital para **maximizar el Ratio de Sharpe**, mostrando la rentabilidad esperada conjunta y el nivel de riesgo (volatilidad anualizada).
+## 🚀 Características Principales y Flujo de la Interfaz
 
-4. **Visualización y Generación de Reportes:**
-   - Gráficas interactivas mostrando la evolución del precio de las acciones en los últimos 6 meses.
-   - Resaltado visual condicional (verde/rojo) que indica automáticamente el activo "ganador" en cada métrica financiera.
-   - **Exportación a PDF:** Generación dinámica de un reporte profesional descargable que incluye la comparativa, la asignación óptima de Markowitz y notas legales.
+La aplicación está estructurada exactamente en **6 fases (pestañas)** secuenciales que guían al usuario y automatizan los cálculos matemáticos:
+
+1. **Datos del Inversor:** Recopilación de parámetros de entrada críticos para el modelo (Capital a invertir, Plazo temporal, Tasa libre de riesgo $R_f$ y Prima de mercado). Incluye un diccionario metodológico de las variables.
+2. **Cuestionario MiFID II:** Test de idoneidad y conveniencia mediante *sliders* de puntuación. Clasifica algorítmicamente al inversor.
+3. **Productos por Perfil (Motor Actuarial Dinámico):**
+   - **Extracción de datos en tiempo real:** Conexión con Yahoo Finance para descargar series históricas de precios (últimos 5 años).
+   - **Benchmark de Mercado:** Utilización del Euro Stoxx 50 (`^STOXX50E`) para la obtención empírica de la matriz de covarianzas.
+   - **Cálculo en vivo:** Procesamiento matemático de la Volatilidad Anualizada ($\sigma$), la Beta ($\beta$) real, la rentabilidad exigida (**CAPM**) y el Ratio de Sharpe.
+4. **Análisis M1-M7 y Cartera Conjunta:** Selección automatizada del activo ganador por sector (Banco y Aseguradora) según el Score. Permite simular el cruce de pesos porcentuales y calcular la rentabilidad, el riesgo y el Ratio de Sharpe de la cartera combinada.
+5. **Gráficos y Proyección:** Cálculo de capitalización compuesta del capital invertido desde $t=0$ hasta el año límite del horizonte temporal. Visualización gráfica del desempeño de la cartera híbrida frente a los activos individuales.
+6. **Resumen de Interfaz y Exportación:** Dashboard ejecutivo con las resoluciones metodológicas del algoritmo.
+   - **Exportación a PDF:** Generación dinámica de la Ficha de Recomendación Oficial, lista para anexar a la memoria del TFM.
+
+🛡️ **Blindaje Anti-Fallos (Fallback System):** Sistema de seguridad programado para la defensa del máster. Si el ordenador carece de conexión a internet o la API de Yahoo Finance deniega la petición durante la presentación, el sistema adopta instantáneamente los valores actuariales estáticos pre-calculados en el modelo original, asegurando un funcionamiento ininterrumpido.
 
 ## 🛠️ Stack Tecnológico
 
 El proyecto está construido íntegramente en Python utilizando las siguientes librerías:
 
-* **[Streamlit](https://streamlit.io/):** Creación de la interfaz gráfica y despliegue web interactivo.
-* **[yfinance](https://pypi.org/project/yfinance/):** Conexión con la API de Yahoo Finance para la descarga de cotizaciones, ratios financieros y metadatos bursátiles.
-* **[Pandas](https://pandas.pydata.org/) & [NumPy](https://numpy.org/):** Estructuración, limpieza y cálculos matriciales sobre los dataframes financieros.
-* **[SciPy](https://scipy.org/):** Resolución algorítmica para la minimización numérica de funciones (optimización de Markowitz).
+* **[Streamlit](https://streamlit.io/):** Creación de la interfaz gráfica de usuario y gestión del estado de la sesión (`session_state`).
+* **[yfinance](https://pypi.org/project/yfinance/):** Petición de cotizaciones históricas y metadatos bursátiles al mercado de valores.
+* **[Pandas](https://pandas.pydata.org/) & [NumPy](https://numpy.org/):** Limpieza de series de tiempo, alineación de fechas, retornos logarítmicos y cálculos algebraicos de matrices de covarianza.
+* **[SciPy](https://scipy.org/):** Resolución algorítmica para la optimización de pesos.
 * **[FPDF2](https://pyfpdf.github.io/fpdf2/):** Construcción estructurada y exportación del reporte ejecutivo en formato `.pdf`.
-* **[Certifi](https://pypi.org/project/certifi/):** Gestión de certificados SSL para garantizar conexiones seguras en las peticiones a la API.
+* **[Certifi](https://pypi.org/project/certifi/):** Gestión de certificados SSL para garantizar la resolución y autorización de peticiones web hacia la API financiera.
 
 ## 💻 Instalación y Ejecución Local
 
 Sigue estos pasos para levantar la aplicación en tu entorno de desarrollo:
 
 **1. Clonar o descargar el proyecto**
-Asegúrate de tener el archivo `app.py` guardado en tu directorio de trabajo.
+Asegúrate de tener el archivo `app.py` (o `main.py`) guardado en tu directorio de trabajo.
 
 **2. Instalar dependencias**
 Abre tu terminal y ejecuta el siguiente comando para instalar todas las librerías necesarias:
 ```bash
-pip install streamlit yfinance pandas numpy scipy fpdf2 certifi
+pip install -r requirements.txt
