@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import config
 from core import capm
 
 
@@ -53,18 +54,65 @@ def test_sharpe_ratio_zero_volatility_does_not_raise() -> None:
     assert capm.sharpe_ratio(expected_return=0.08, risk_free_rate=0.02, volatility=0.0) == 0.0
 
 
-def test_score_moderate_profile_penalizes_distance_and_volatility() -> None:
-    low_score = capm.score_moderate_profile(beta=1.0, volatility=0.10)
-    high_score = capm.score_moderate_profile(beta=1.8, volatility=0.10)
+def test_score_for_moderado_penalizes_distance_and_volatility() -> None:
+    low_score = capm.score_for_profile(beta=1.0, volatility=0.10, profile=config.PERFIL_MODERADO)
+    high_score = capm.score_for_profile(beta=1.8, volatility=0.10, profile=config.PERFIL_MODERADO)
     assert low_score < high_score
 
 
+def test_score_for_conservador_penalizes_beta_and_volatility() -> None:
+    low_risk_score = capm.score_for_profile(beta=0.3, volatility=0.05, profile=config.PERFIL_CONSERVADOR)
+    high_risk_score = capm.score_for_profile(beta=1.5, volatility=0.30, profile=config.PERFIL_CONSERVADOR)
+    assert low_risk_score < high_risk_score
+
+
+def test_score_for_agresivo_rewards_high_beta() -> None:
+    high_beta_score = capm.score_for_profile(beta=1.8, volatility=0.30, profile=config.PERFIL_AGRESIVO)
+    low_beta_score = capm.score_for_profile(beta=0.5, volatility=0.05, profile=config.PERFIL_AGRESIVO)
+    assert high_beta_score < low_beta_score  # score mas bajo = mejor candidato para Agresivo
+
+
 @pytest.mark.parametrize(
-    "beta,expected_eligible",
-    [(1.0, True), (0.75, True), (1.25, True), (1.26, False), (0.74, False)],
+    "beta,profile,expected_eligible",
+    [
+        # Moderado: banda 0.75-1.25 (igual que el modelo original)
+        (1.0, config.PERFIL_MODERADO, True),
+        (0.75, config.PERFIL_MODERADO, True),
+        (1.25, config.PERFIL_MODERADO, True),
+        (1.26, config.PERFIL_MODERADO, False),
+        (0.74, config.PERFIL_MODERADO, False),
+        # Conservador: beta <= 0.75
+        (0.75, config.PERFIL_CONSERVADOR, True),
+        (0.50, config.PERFIL_CONSERVADOR, True),
+        (0.76, config.PERFIL_CONSERVADOR, False),
+        # Agresivo: beta >= 1.25
+        (1.25, config.PERFIL_AGRESIVO, True),
+        (1.50, config.PERFIL_AGRESIVO, True),
+        (1.24, config.PERFIL_AGRESIVO, False),
+    ],
 )
-def test_is_eligible_moderate_profile_respects_bounds(beta: float, expected_eligible: bool) -> None:
-    assert capm.is_eligible_moderate_profile(beta) is expected_eligible
+def test_is_eligible_for_profile_respects_bounds(beta: float, profile: str, expected_eligible: bool) -> None:
+    assert capm.is_eligible_for_profile(beta, profile) is expected_eligible
+
+
+def test_beta_partition_across_profiles_has_no_gaps_or_overlaps() -> None:
+    """Todo el eje de Beta debe quedar cubierto por exactamente un perfil (o dos en el borde)."""
+    for beta in [-1.0, 0.0, 0.5, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 3.0]:
+        eligible_profiles = [
+            profile
+            for profile in (config.PERFIL_CONSERVADOR, config.PERFIL_MODERADO, config.PERFIL_AGRESIVO)
+            if capm.is_eligible_for_profile(beta, profile)
+        ]
+        assert len(eligible_profiles) >= 1, f"beta={beta} no es elegible para ningun perfil"
+
+
+def test_describe_beta_criterion_mentions_the_configured_bounds() -> None:
+    lower = config.BETA_ELIGIBILITY_LOWER_BOUND
+    upper = config.BETA_ELIGIBILITY_UPPER_BOUND
+    assert f"{lower:.2f}" in capm.describe_beta_criterion(config.PERFIL_CONSERVADOR)
+    assert f"{lower:.2f}" in capm.describe_beta_criterion(config.PERFIL_MODERADO)
+    assert f"{upper:.2f}" in capm.describe_beta_criterion(config.PERFIL_MODERADO)
+    assert f"{upper:.2f}" in capm.describe_beta_criterion(config.PERFIL_AGRESIVO)
 
 
 def test_annualized_covariance_is_symmetric() -> None:
@@ -91,26 +139,69 @@ class _FakeService:
         return self._returns_by_ticker[ticker]
 
 
-def test_build_universe_metrics_produces_one_row_per_asset() -> None:
-    universe = [
-        {"Sector": "Banco", "Empresa": "Banco Test", "Ticker": "BANK.MC", "Producto": "Acción"},
-        {"Sector": "Seguros", "Empresa": "Seguro Test", "Ticker": "INS.MC", "Producto": "Acción"},
-    ]
+_TEST_UNIVERSE = [
+    {"Sector": "Banco", "Empresa": "Banco Test", "Ticker": "BANK.MC", "Producto": "Acción"},
+    {"Sector": "Seguros", "Empresa": "Seguro Test", "Ticker": "INS.MC", "Producto": "Acción"},
+]
+
+
+def _test_service() -> _FakeService:
     market_returns = _returns([0.01, -0.01, 0.02, 0.00, 0.01])
-    service = _FakeService({
+    return _FakeService({
         "^BENCH": market_returns,
         "BANK.MC": _returns([0.015, -0.02, 0.025, 0.005, 0.01]),
         "INS.MC": _returns([0.005, -0.005, 0.01, -0.002, 0.008]),
     })
 
+
+def test_build_universe_metrics_produces_one_row_per_asset() -> None:
     result = capm.build_universe_metrics(
-        service=service,
-        universe=universe,
+        service=_test_service(),
+        universe=_TEST_UNIVERSE,
         benchmark_ticker="^BENCH",
         risk_free_rate=0.02,
         market_premium=0.05,
+        investor_profile=config.PERFIL_MODERADO,
     )
 
     assert len(result) == 2
     assert set(result["Sector"]) == {"Banco", "Seguros"}
-    assert (result["Perfil objetivo"] == "Moderado").all()
+    assert (result[config.COL_PERFIL_OBJETIVO] == config.PERFIL_MODERADO).all()
+
+
+@pytest.mark.parametrize(
+    "investor_profile", [config.PERFIL_CONSERVADOR, config.PERFIL_MODERADO, config.PERFIL_AGRESIVO]
+)
+def test_build_universe_metrics_reflects_the_actual_profile_not_a_hardcoded_one(investor_profile: str) -> None:
+    """Regresion del bug critico de la auditoria: antes, esta columna era SIEMPRE 'Moderado'."""
+    result = capm.build_universe_metrics(
+        service=_test_service(),
+        universe=_TEST_UNIVERSE,
+        benchmark_ticker="^BENCH",
+        risk_free_rate=0.02,
+        market_premium=0.05,
+        investor_profile=investor_profile,
+    )
+
+    assert (result[config.COL_PERFIL_OBJETIVO] == investor_profile).all()
+    # El score debe coincidir exactamente con la formula del perfil solicitado.
+    for _, row in result.iterrows():
+        expected_score = capm.score_for_profile(row[config.COL_BETA], row[config.COL_VOL_ANUAL], investor_profile)
+        assert row[config.COL_SCORE_PERFIL] == pytest.approx(expected_score)
+
+
+def test_build_universe_metrics_score_differs_across_profiles_for_the_same_asset() -> None:
+    """Mismo activo, mismos datos de mercado: el score debe variar segun el perfil."""
+    scores_by_profile = {}
+    for profile in (config.PERFIL_CONSERVADOR, config.PERFIL_MODERADO, config.PERFIL_AGRESIVO):
+        result = capm.build_universe_metrics(
+            service=_test_service(),
+            universe=_TEST_UNIVERSE,
+            benchmark_ticker="^BENCH",
+            risk_free_rate=0.02,
+            market_premium=0.05,
+            investor_profile=profile,
+        )
+        scores_by_profile[profile] = tuple(result[config.COL_SCORE_PERFIL])
+
+    assert len(set(scores_by_profile.values())) == 3  # las 3 tuplas de scores son distintas entre si
