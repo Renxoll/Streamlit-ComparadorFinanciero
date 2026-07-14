@@ -26,9 +26,20 @@ UNIVERSO_TFM: list[dict[str, str]] = [
     {"Sector": "Seguros", "Empresa": "Assicurazioni Generali", "Ticker": "G.MI", "Producto": "Accion ordinaria - entidad aseguradora"},
 ]
 
-# --- Umbrales de elegibilidad por perfil moderado (Beta cercana a 1) ---
-MODERADO_BETA_MIN = 0.75
-MODERADO_BETA_MAX = 1.25
+# --- Perfiles de riesgo normativos (unica fuente de verdad para las 3 etiquetas) ---
+PERFIL_CONSERVADOR = "Conservador"
+PERFIL_MODERADO = "Moderado"
+PERFIL_AGRESIVO = "Agresivo"
+
+# --- Fronteras de elegibilidad de activos por Beta.
+#     Particion continua y sin solapes del eje de Beta en 3 bandas (Fase 2):
+#       Conservador: beta <= BETA_ELIGIBILITY_LOWER_BOUND
+#       Moderado:    BETA_ELIGIBILITY_LOWER_BOUND <= beta <= BETA_ELIGIBILITY_UPPER_BOUND
+#       Agresivo:    beta >= BETA_ELIGIBILITY_UPPER_BOUND
+#     Los valores se heredan sin cambios del modelo original (que solo definia la banda
+#     Moderado); ver core/capm.py::is_eligible_for_profile. ---
+BETA_ELIGIBILITY_LOWER_BOUND = 0.75
+BETA_ELIGIBILITY_UPPER_BOUND = 1.25
 
 # --- Nombres de columnas del DataFrame de universo, centralizados para evitar
 #     errores de tipeo al compartirse entre core/capm.py y ui/sections/*.py ---
@@ -43,5 +54,7 @@ COL_VOL_DIARIA = "Volatilidad diaria 5 años"
 COL_VOL_ANUAL = "Volatilidad anual 5 años"
 COL_CAPM = "Rentabilidad CAPM"
 COL_SHARPE = "Sharpe individual CAPM"
-COL_SCORE_MODERADO = "Score moderado"
-COL_ELEGIBLE_MODERADO = "Elegible perfil moderado"
+# Antes "Score moderado" / "Elegible perfil moderado": se generalizan en la Fase 2 porque
+# ahora reflejan el perfil REAL calculado, no siempre "Moderado" (bug corregido).
+COL_SCORE_PERFIL = "Score perfil"
+COL_ELEGIBLE_PERFIL = "Elegible perfil actual"
