@@ -36,14 +36,19 @@ st.caption("Máster Universitario en Ciencias Actuariales y Financieras (MUCAF) 
 
 # --- Inicialización de memoria de sesión ---
 if "perfil_calc" not in st.session_state:
-    st.session_state.perfil_calc = "Moderado"
+    st.session_state.perfil_calc = config.PERFIL_MODERADO
 if "puntuacion_test" not in st.session_state:
-    st.session_state.puntuacion_test = 18
+    st.session_state.puntuacion_test = 3.0  # puntuacion neutra en la escala 1.0-5.0 (antes: 18 sobre 30)
 
 
 @st.cache_data(ttl=3600, show_spinner="Descargando datos históricos y procesando matrices de covarianza...")
-def _cached_universe_metrics(risk_free_rate: float, market_premium: float) -> pd.DataFrame:
-    """Envoltorio cacheado de `capm.build_universe_metrics` (misma clave que el original: Rf y prima)."""
+def _cached_universe_metrics(risk_free_rate: float, market_premium: float, investor_profile: str) -> pd.DataFrame:
+    """Envoltorio cacheado de `capm.build_universe_metrics`.
+
+    Desde la Fase 2, `investor_profile` forma parte de la clave de cache: el
+    score y la elegibilidad de cada activo dependen del perfil calculado, no
+    solo de Rf y la prima de mercado.
+    """
     service = MarketDataService()
     return capm.build_universe_metrics(
         service=service,
@@ -51,6 +56,7 @@ def _cached_universe_metrics(risk_free_rate: float, market_premium: float) -> pd
         benchmark_ticker=config.BENCHMARK_TICKER,
         risk_free_rate=risk_free_rate,
         market_premium=market_premium,
+        investor_profile=investor_profile,
     )
 
 
@@ -66,13 +72,17 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 with tab1:
     investor = investor_data.render()
 
-universe_metrics = _cached_universe_metrics(investor.risk_free_rate, investor.market_premium)
-
 with tab2:
     questionnaire.render()
 
+# Se calcula DESPUES del cuestionario: el universo depende del perfil real
+# calculado en la Hoja 2 (st.session_state.perfil_calc), no de un valor fijo.
+universe_metrics = _cached_universe_metrics(
+    investor.risk_free_rate, investor.market_premium, st.session_state.perfil_calc
+)
+
 with tab3:
-    products_by_profile.render(universe_metrics, investor.plazo)
+    products_by_profile.render(universe_metrics, investor.plazo, st.session_state.perfil_calc)
 
 with tab4:
     markowitz_selection = markowitz_portfolio.render(universe_metrics, investor.risk_free_rate)
