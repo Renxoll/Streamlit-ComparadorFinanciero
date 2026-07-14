@@ -62,18 +62,55 @@ def sharpe_ratio(expected_return: float, risk_free_rate: float, volatility: floa
     return (expected_return - risk_free_rate) / volatility
 
 
-def score_moderate_profile(beta: float, volatility: float) -> float:
-    """Heuristica de seleccion para perfil moderado: penaliza distancia a beta=1 y volatilidad."""
+def score_for_profile(beta: float, volatility: float, profile: str) -> float:
+    """Heuristica de seleccion de activos: un score MAS BAJO es MEJOR para `profile`.
+
+    - Conservador: penaliza beta y volatilidad por igual (prioriza proteccion de capital).
+    - Moderado: penaliza la distancia a beta=1 y la volatilidad (activos "de mercado").
+    - Agresivo: premia la beta alta, sin penalizar volatilidad (busca amplificar retornos).
+
+    Fase 2: sustituye a `score_moderate_profile`, que aplicaba SIEMPRE la formula
+    de "Moderado" sin importar el perfil realmente calculado por el cuestionario
+    (bug critico identificado en la auditoria: la seleccion de activos no dependia
+    del perfil del usuario). Reemplazada tras verificar con tests que, para
+    `profile == config.PERFIL_MODERADO`, el resultado es identico al original.
+    """
+    if profile == config.PERFIL_CONSERVADOR:
+        return beta + volatility
+    if profile == config.PERFIL_AGRESIVO:
+        return -beta
     return abs(beta - 1.0) + volatility
 
 
-def is_eligible_moderate_profile(
+def is_eligible_for_profile(
     beta: float,
-    lower_bound: float = config.MODERADO_BETA_MIN,
-    upper_bound: float = config.MODERADO_BETA_MAX,
+    profile: str,
+    lower_bound: float = config.BETA_ELIGIBILITY_LOWER_BOUND,
+    upper_bound: float = config.BETA_ELIGIBILITY_UPPER_BOUND,
 ) -> bool:
-    """Indica si un activo entra en el rango de beta aceptado para perfil moderado."""
+    """Indica si un activo entra en el rango de beta aceptado para `profile`.
+
+    Particiona el eje de Beta en 3 bandas contiguas y sin solapes:
+    Conservador (beta <= lower_bound), Moderado (lower_bound <= beta <= upper_bound),
+    Agresivo (beta >= upper_bound). Sustituye a `is_eligible_moderate_profile`, que
+    solo sabia evaluar la banda Moderado (ver nota en `score_for_profile`).
+    """
+    if profile == config.PERFIL_CONSERVADOR:
+        return beta <= lower_bound
+    if profile == config.PERFIL_AGRESIVO:
+        return beta >= upper_bound
     return lower_bound <= beta <= upper_bound
+
+
+def describe_beta_criterion(profile: str) -> str:
+    """Texto descriptivo del criterio de Beta aplicado, coherente con `is_eligible_for_profile`."""
+    lower = config.BETA_ELIGIBILITY_LOWER_BOUND
+    upper = config.BETA_ELIGIBILITY_UPPER_BOUND
+    if profile == config.PERFIL_CONSERVADOR:
+        return f"Beta baja (≤ {lower:.2f}): prioriza protección de capital"
+    if profile == config.PERFIL_AGRESIVO:
+        return f"Beta alta (≥ {upper:.2f}): prioriza sensibilidad al mercado"
+    return f"Beta cercana a 1 ({lower:.2f}-{upper:.2f}): riesgo similar al mercado"
 
 
 def annualized_covariance(returns_a: pd.Series, returns_b: pd.Series) -> float:
@@ -102,12 +139,15 @@ def build_universe_metrics(
     benchmark_ticker: str,
     risk_free_rate: float,
     market_premium: float,
+    investor_profile: str,
     period: str = config.HISTORY_PERIOD,
 ) -> pd.DataFrame:
     """Orquesta la descarga y el calculo CAPM completo para cada activo del universo.
 
-    Reemplaza a `procesar_universo` del `app.py` original, manteniendo
-    exactamente los mismos calculos y nombres de columna.
+    Reemplaza a `procesar_universo` del `app.py` original. A partir de la Fase 2,
+    `investor_profile` determina el score y la elegibilidad de cada activo
+    (antes, ambos se calculaban SIEMPRE con la formula de "Moderado", sin importar
+    el resultado real del cuestionario).
     """
     market_returns = service.get_returns(benchmark_ticker, period)
 
@@ -123,7 +163,7 @@ def build_universe_metrics(
         expected_return = capm_expected_return(beta, risk_free_rate, market_premium)
 
         rows.append({
-            config.COL_PERFIL_OBJETIVO: "Moderado",
+            config.COL_PERFIL_OBJETIVO: investor_profile,
             config.COL_SECTOR: asset["Sector"],
             config.COL_EMPRESA: asset["Empresa"],
             config.COL_TICKER: ticker,
@@ -134,8 +174,8 @@ def build_universe_metrics(
             config.COL_VOL_ANUAL: annual_volatility,
             config.COL_CAPM: expected_return,
             config.COL_SHARPE: sharpe_ratio(expected_return, risk_free_rate, annual_volatility),
-            config.COL_SCORE_MODERADO: score_moderate_profile(beta, annual_volatility),
-            config.COL_ELEGIBLE_MODERADO: "Sí" if is_eligible_moderate_profile(beta) else "No",
+            config.COL_SCORE_PERFIL: score_for_profile(beta, annual_volatility, investor_profile),
+            config.COL_ELEGIBLE_PERFIL: "Sí" if is_eligible_for_profile(beta, investor_profile) else "No",
         })
 
     return pd.DataFrame(rows)
