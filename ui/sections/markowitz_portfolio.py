@@ -1,14 +1,19 @@
 """Hoja 4: analisis M1-M7 y cruce de ganadores sectoriales.
 
-Fase 1: se mantiene la heuristica original de seleccion ("mejor banco + mejor
-aseguradora" por `Score moderado` minimo) con mezcla manual de pesos mediante
-un slider. La optimizacion real de Markowitz sobre N activos con
-`scipy.optimize.minimize` es la observacion 6/9 del tutor y se implementa en
-el paquete `portfolio/` en la Fase 3.
+Se mantiene la heuristica de seleccion ("mejor banco + mejor aseguradora" por
+`Score perfil` minimo, ver `core.capm.score_for_profile`) con mezcla manual
+de pesos mediante un slider. La optimizacion real de Markowitz sobre N
+activos con `scipy.optimize.minimize` es la observacion 6/9 del tutor y se
+implementa en el paquete `portfolio/` en la Fase 3.
 
-La unica correccion funcional de esta fase es que la descarga de las series
-para el calculo de covarianza del cruce ahora esta cacheada: en el original
-no lo estaba, y cualquier interaccion en CUALQUIER pestaña de la app volvia a
+Desde la Fase 2, `universe_metrics` ya trae el score y la elegibilidad
+calculados para el perfil REAL del inversor (antes, siempre se usaba la
+formula de "Moderado"): esta seccion no necesita saber cual es el perfil,
+simplemente selecciona el minimo de `Score perfil` por sector.
+
+Correccion funcional de la Fase 1 (se mantiene): la descarga de las series
+para el calculo de covarianza del cruce esta cacheada; en el original no lo
+estaba, y cualquier interaccion en CUALQUIER pestaña de la app volvia a
 disparar 2 llamadas de red sincronas a Yahoo Finance en cada rerun de
 Streamlit (causa mas probable de las "interacciones que hacen fallar la app"
 reportadas por el tutor, observacion 4/8).
@@ -47,8 +52,8 @@ def render(universe_metrics: pd.DataFrame, risk_free_rate: float) -> MarkowitzSe
     # `.loc[idxmin()]` selecciona una única fila por una etiqueta escalar, por lo que
     # en tiempo de ejecución siempre devuelve una Series; se declara explícitamente
     # porque el stub de pandas no puede probarlo de forma estática.
-    mejor_banco = cast(pd.Series, bancos_df.loc[bancos_df[config.COL_SCORE_MODERADO].idxmin()])
-    mejor_seguro = cast(pd.Series, seguros_df.loc[seguros_df[config.COL_SCORE_MODERADO].idxmin()])
+    mejor_banco = cast(pd.Series, bancos_df.loc[bancos_df[config.COL_SCORE_PERFIL].idxmin()])
+    mejor_seguro = cast(pd.Series, seguros_df.loc[seguros_df[config.COL_SCORE_PERFIL].idxmin()])
 
     df_m1_m7 = universe_metrics.copy()
     df_m1_m7.insert(0, "Combinación Markowitz", _COMBINACIONES_MARKOWITZ)
@@ -60,13 +65,13 @@ def render(universe_metrics: pd.DataFrame, risk_free_rate: float) -> MarkowitzSe
         elif row[config.COL_TICKER] == mejor_seguro[config.COL_TICKER]:
             resultados_col.append("Mejor aseguradora")
         else:
-            resultados_col.append("Candidato moderado")
+            resultados_col.append("Otro candidato")
     df_m1_m7["Resultado"] = resultados_col
 
     columnas_vista = [
         "Combinación Markowitz", config.COL_PERFIL_OBJETIVO, config.COL_SECTOR, config.COL_EMPRESA,
         config.COL_TICKER, config.COL_PRODUCTO, config.COL_BETA, config.COL_VOL_ANUAL,
-        config.COL_CAPM, config.COL_SHARPE, config.COL_DISTANCIA_BETA, config.COL_SCORE_MODERADO, "Resultado",
+        config.COL_CAPM, config.COL_SHARPE, config.COL_DISTANCIA_BETA, config.COL_SCORE_PERFIL, "Resultado",
     ]
     st.dataframe(df_m1_m7[columnas_vista], hide_index=True, use_container_width=True)
 
