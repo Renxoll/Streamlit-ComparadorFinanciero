@@ -15,6 +15,8 @@ reportadas por el tutor, observacion 4/8).
 """
 from __future__ import annotations
 
+from typing import cast
+
 import pandas as pd
 import streamlit as st
 
@@ -42,8 +44,11 @@ def render(universe_metrics: pd.DataFrame, risk_free_rate: float) -> MarkowitzSe
     bancos_df = universe_metrics[universe_metrics[config.COL_SECTOR] == "Banco"]
     seguros_df = universe_metrics[universe_metrics[config.COL_SECTOR] == "Seguros"]
 
-    mejor_banco = bancos_df.loc[bancos_df[config.COL_SCORE_MODERADO].idxmin()]
-    mejor_seguro = seguros_df.loc[seguros_df[config.COL_SCORE_MODERADO].idxmin()]
+    # `.loc[idxmin()]` selecciona una única fila por una etiqueta escalar, por lo que
+    # en tiempo de ejecución siempre devuelve una Series; se declara explícitamente
+    # porque el stub de pandas no puede probarlo de forma estática.
+    mejor_banco = cast(pd.Series, bancos_df.loc[bancos_df[config.COL_SCORE_MODERADO].idxmin()])
+    mejor_seguro = cast(pd.Series, seguros_df.loc[seguros_df[config.COL_SCORE_MODERADO].idxmin()])
 
     df_m1_m7 = universe_metrics.copy()
     df_m1_m7.insert(0, "Combinación Markowitz", _COMBINACIONES_MARKOWITZ)
@@ -74,17 +79,22 @@ def render(universe_metrics: pd.DataFrame, risk_free_rate: float) -> MarkowitzSe
     peso_banco = st.slider("Peso asignado al Banco (%)", 0, 100, 50, step=5) / 100.0
     peso_seguro = 1.0 - peso_banco
 
-    with st.spinner("Calculando covarianza histórica exacta del cruce seleccionado..."):
-        covarianza_anualizada = _fetch_annualized_covariance(
-            mejor_banco[config.COL_TICKER], mejor_seguro[config.COL_TICKER]
-        )
+    ticker_banco = str(mejor_banco[config.COL_TICKER])
+    ticker_seguro = str(mejor_seguro[config.COL_TICKER])
+    beta_banco = float(mejor_banco[config.COL_BETA])
+    beta_seguro = float(mejor_seguro[config.COL_BETA])
+    capm_banco = float(mejor_banco[config.COL_CAPM])
+    capm_seguro = float(mejor_seguro[config.COL_CAPM])
+    vol_banco = float(mejor_banco[config.COL_VOL_ANUAL])
+    vol_seguro = float(mejor_seguro[config.COL_VOL_ANUAL])
 
-    beta_conjunta = (peso_banco * mejor_banco[config.COL_BETA]) + (peso_seguro * mejor_seguro[config.COL_BETA])
-    rentabilidad_conjunta = (peso_banco * mejor_banco[config.COL_CAPM]) + (peso_seguro * mejor_seguro[config.COL_CAPM])
+    with st.spinner("Calculando covarianza histórica exacta del cruce seleccionado..."):
+        covarianza_anualizada = _fetch_annualized_covariance(ticker_banco, ticker_seguro)
+
+    beta_conjunta = (peso_banco * beta_banco) + (peso_seguro * beta_seguro)
+    rentabilidad_conjunta = (peso_banco * capm_banco) + (peso_seguro * capm_seguro)
     volatilidad_conjunta = capm.combined_portfolio_volatility(
-        mejor_banco[config.COL_VOL_ANUAL], peso_banco,
-        mejor_seguro[config.COL_VOL_ANUAL], peso_seguro,
-        covarianza_anualizada,
+        vol_banco, peso_banco, vol_seguro, peso_seguro, covarianza_anualizada,
     )
     sharpe_conjunto = capm.sharpe_ratio(rentabilidad_conjunta, risk_free_rate, volatilidad_conjunta)
 

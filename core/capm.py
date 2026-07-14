@@ -29,11 +29,14 @@ def align_returns(asset_returns: pd.Series, market_returns: pd.Series) -> pd.Dat
 def compute_beta(aligned_returns: pd.DataFrame) -> float:
     """Calcula la Beta (sensibilidad al mercado) a partir de retornos alineados."""
     covariance_matrix = aligned_returns.cov()
-    covariance_asset_market = covariance_matrix.loc["asset", "market"]
-    market_variance = covariance_matrix.loc["market", "market"]
+    # pandas-stubs tipa `DataFrame.loc[escalar, escalar]` como una union muy amplia
+    # (no puede probar estaticamente que `.cov()` de columnas float devuelve float64).
+    # En tiempo de ejecucion siempre es un numpy.float64, por lo que `float(...)` es seguro.
+    covariance_asset_market = float(covariance_matrix.loc["asset", "market"])  # type: ignore[arg-type]
+    market_variance = float(covariance_matrix.loc["market", "market"])  # type: ignore[arg-type]
     if market_variance == 0:
         return 1.0
-    return float(covariance_asset_market / market_variance)
+    return covariance_asset_market / market_variance
 
 
 def annualized_volatility(daily_returns: pd.Series) -> float:
@@ -77,7 +80,8 @@ def annualized_covariance(returns_a: pd.Series, returns_b: pd.Series) -> float:
     """Covarianza anualizada entre dos series de retornos diarios ya alineables."""
     aligned = pd.concat([returns_a, returns_b], axis=1).dropna()
     aligned.columns = ["a", "b"]
-    return float(aligned.cov().loc["a", "b"] * TRADING_DAYS_PER_YEAR)
+    covariance_ab = float(aligned.cov().loc["a", "b"])  # type: ignore[arg-type]  # ver nota en compute_beta
+    return covariance_ab * TRADING_DAYS_PER_YEAR
 
 
 def combined_portfolio_volatility(
