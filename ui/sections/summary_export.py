@@ -4,6 +4,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from core import capm
 from core.models import InvestorInputs, MarkowitzSelection
 from reports.pdf_export import build_summary_pdf
 
@@ -11,6 +12,8 @@ from reports.pdf_export import build_summary_pdf
 def render(investor: InvestorInputs, selection: MarkowitzSelection) -> None:
     """Renderiza la tarjeta resumen y el boton de descarga del PDF ejecutivo."""
     st.header("HOJA 6: RESUMEN FINAL DEL SISTEMA DE RECOMENDACIÓN")
+
+    perfil_actual = st.session_state.perfil_calc
 
     df_resumen_card = pd.DataFrame({
         "Concepto Metodológico": [
@@ -20,10 +23,11 @@ def render(investor: InvestorInputs, selection: MarkowitzSelection) -> None:
             "Criterio de selección", "Observación",
         ],
         "Valor Asignado": [
-            investor.nombre, st.session_state.perfil_calc, "Bancos y aseguradoras de la Unión Europea",
-            "7", "Beta cercana a 1 (Moderado)",
+            investor.nombre, perfil_actual, "Bancos y aseguradoras de la Unión Europea",
+            "7", capm.describe_beta_criterion(perfil_actual),
             selection.mejor_banco["Empresa"], selection.mejor_seguro["Empresa"], "CAPM",
-            "Menor score moderado por sector", "M1-M7 representan empresas candidatas, no combinaciones de pesos",
+            f"Menor score del perfil {perfil_actual} por sector",
+            "M1-M7 representan empresas candidatas, no combinaciones de pesos",
         ],
     })
 
