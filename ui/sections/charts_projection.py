@@ -89,7 +89,7 @@ def render(investor: InvestorInputs, selection: MarkowitzSelection) -> None:
                 f"{rentabilidad_50_50 * 100:.2f}%",
                 f"{sharpe_referencia:.4f}",
             ],
-            "Observación": ["Selección final por sector", "Universo moderado UE", "Cercana a 1", "Riesgo diversificado", "Modelo CAPM", "Rentabilidad-Riesgo"],
+            "Observación": ["Selección final por sector", "Universo UE (bancos y aseguradoras)", "Según criterio del perfil actual", "Riesgo diversificado", "Modelo CAPM", "Rentabilidad-Riesgo"],
         })
         st.dataframe(df_ind, hide_index=True, use_container_width=True)
 
