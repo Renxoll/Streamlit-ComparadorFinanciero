@@ -11,7 +11,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+import config
+from portfolio import constraints as constraints_module
 from portfolio import metrics
+from portfolio.constraints import get_constraints_for_profile
 from portfolio.optimizer import optimize_max_sharpe
 
 # --- Caso analítico verificable a mano ---
