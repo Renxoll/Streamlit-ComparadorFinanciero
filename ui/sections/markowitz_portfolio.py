@@ -30,7 +30,10 @@ from core import capm
 from core.market_data import MarketDataService
 from core.models import MarkowitzSelection
 
-_COMBINACIONES_MARKOWITZ = ["M1", "M2", "M3", "M4", "M5", "M6", "M7"]
+# Nota (Subfase 3.1): esta pestaña completa se reescribe en la Subfase 3.5 para usar
+# la optimizacion real de Markowitz sobre el universo ampliado. Mientras tanto, la
+# etiqueta "M1..MN" se genera dinamicamente (antes era una lista fija de 7 elementos,
+# que rompia al ampliar el universo con ETFs: longitud fija != numero real de activos).
 
 
 @st.cache_data(ttl=3600, show_spinner="Calculando covarianza histórica exacta del cruce seleccionado...")
@@ -56,7 +59,8 @@ def render(universe_metrics: pd.DataFrame, risk_free_rate: float) -> MarkowitzSe
     mejor_seguro = cast(pd.Series, seguros_df.loc[seguros_df[config.COL_SCORE_PERFIL].idxmin()])
 
     df_m1_m7 = universe_metrics.copy()
-    df_m1_m7.insert(0, "Combinación Markowitz", _COMBINACIONES_MARKOWITZ)
+    combinaciones = [f"M{i + 1}" for i in range(len(df_m1_m7))]
+    df_m1_m7.insert(0, "Combinación Markowitz", combinaciones)
 
     resultados_col = []
     for _, row in df_m1_m7.iterrows():
