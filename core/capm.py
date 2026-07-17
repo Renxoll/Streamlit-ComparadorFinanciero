@@ -168,6 +168,7 @@ def build_universe_metrics(
             config.COL_EMPRESA: asset["Empresa"],
             config.COL_TICKER: ticker,
             config.COL_PRODUCTO: asset["Producto"],
+            config.COL_CLASE_ACTIVO: asset["Clase de activo"],
             config.COL_BETA: beta,
             config.COL_DISTANCIA_BETA: abs(beta - 1.0),
             config.COL_VOL_DIARIA: daily_volatility,
