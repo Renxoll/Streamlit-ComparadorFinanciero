@@ -6,12 +6,15 @@ import pytest
 
 import config
 from core.capm import is_eligible_for_profile as capm_is_eligible_for_profile
+from tests import fixtures_real_universe as real_universe
 from portfolio.constraints import (
+    InfeasibleConstraintsError,
     ProfileConstraints,
     build_equity_mask,
     build_fixed_income_mask,
     get_constraints_for_profile,
     is_asset_eligible_for_profile,
+    validate_constraint_feasibility,
 )
 
 
@@ -116,3 +119,61 @@ def test_profile_constraints_is_immutable() -> None:
     )
     with pytest.raises(AttributeError):
         constraints.max_weight_per_asset = 0.99  # type: ignore[misc]
+
+
+# --- validate_constraint_feasibility (Subfase 3.4, Parte 2) ---
+
+
+def test_feasibility_accepts_the_real_13_asset_universe_for_all_profiles() -> None:
+    for profile in (config.PERFIL_CONSERVADOR, config.PERFIL_MODERADO, config.PERFIL_AGRESIVO):
+        profile_constraints = get_constraints_for_profile(profile)
+        validate_constraint_feasibility(real_universe.ASSET_CLASSES, profile_constraints)  # no debe lanzar
+
+
+def test_feasibility_rejects_insufficient_fixed_income_capacity() -> None:
+    """Reproduce el hallazgo de la Subfase 3.3: 2 activos de renta fija/monetario,
+    tope de 25% -> 50% maximo, insuficiente para el 60% de Conservador."""
+    asset_classes = np.array([config.CLASE_RENTA_VARIABLE] * 9 + [config.CLASE_RENTA_FIJA, config.CLASE_MONETARIO])
+    profile_constraints = get_constraints_for_profile(config.PERFIL_CONSERVADOR)
+    with pytest.raises(InfeasibleConstraintsError, match="renta fija"):
+        validate_constraint_feasibility(asset_classes, profile_constraints)
+
+
+def test_feasibility_rejects_insufficient_total_capacity() -> None:
+    """4 activos con un tope de 20% cada uno solo permiten cubrir el 80% de la cartera:
+    no se puede completar el 100% exigido por sum(w)=1, sin importar la clase de activo."""
+    asset_classes = np.array(
+        [config.CLASE_RENTA_VARIABLE, config.CLASE_RENTA_VARIABLE, config.CLASE_RENTA_FIJA, config.CLASE_MONETARIO]
+    )
+    restrictive_constraints = ProfileConstraints(
+        profile="Prueba", max_weight_per_asset=0.20, min_fixed_income_weight=0.10, max_equity_weight=0.90
+    )
+    with pytest.raises(InfeasibleConstraintsError, match="capacidad máxima combinada"):
+        validate_constraint_feasibility(asset_classes, restrictive_constraints)
+
+
+def test_feasibility_rejects_contradictory_bands() -> None:
+    """min_fixed_income + max_equity < 100% es una contradiccion estructural: ni
+    maximizando renta fija ni maximizando renta variable se puede llegar al 100%."""
+    asset_classes = np.array([config.CLASE_RENTA_VARIABLE] * 5 + [config.CLASE_RENTA_FIJA] * 5)
+    contradictory_constraints = ProfileConstraints(
+        profile="Prueba", max_weight_per_asset=0.30, min_fixed_income_weight=0.50, max_equity_weight=0.40
+    )
+    with pytest.raises(InfeasibleConstraintsError, match="contradictorias"):
+        validate_constraint_feasibility(asset_classes, contradictory_constraints)
+
+
+def test_feasibility_error_message_is_specific_not_a_bare_string_check() -> None:
+    """La excepcion debe ser un tipo especifico (capturable con `except InfeasibleConstraintsError`),
+    no un ValueError generico ni una cadena suelta devuelta como resultado."""
+    asset_classes = np.array([config.CLASE_RENTA_VARIABLE] * 9 + [config.CLASE_RENTA_FIJA, config.CLASE_MONETARIO])
+    profile_constraints = get_constraints_for_profile(config.PERFIL_CONSERVADOR)
+
+    assert issubclass(InfeasibleConstraintsError, Exception)
+    with pytest.raises(InfeasibleConstraintsError) as exc_info:
+        validate_constraint_feasibility(asset_classes, profile_constraints)
+
+    message = str(exc_info.value)
+    assert "60%" in message
+    assert "50%" in message
+    assert config.PERFIL_CONSERVADOR in message

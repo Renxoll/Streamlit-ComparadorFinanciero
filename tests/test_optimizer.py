@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 import config
+from tests import fixtures_real_universe as real_universe
 from portfolio import constraints as constraints_module
 from portfolio import metrics
 from portfolio.constraints import get_constraints_for_profile
@@ -240,44 +241,51 @@ def test_agresivo_respects_minimum_fixed_income_band() -> None:
     assert fixed_income_weight >= profile_constraints.min_fixed_income_weight - 1e-4
 
 
-def test_conservador_constraints_are_infeasible_with_current_11_asset_universe() -> None:
-    """Hallazgo documentado de la Subfase 3.3, no un bug oculto: Conservador exige
-    RF+Monetario >= 60%, pero el universo actual (definido en la Subfase 3.1) solo
-    tiene 2 activos de esa clase (AGGH.MI, XEON.DE), y el tope de 25% por activo
-    limita su suma maxima combinada al 50% (2 * 0.25). El problema es, por tanto,
-    matematicamente INFACTIBLE con el universo tal cual esta definido hoy.
+def test_conservador_with_only_two_fixed_income_assets_now_raises_instead_of_silently_failing() -> None:
+    """Hallazgo de la Subfase 3.3 (11 activos, solo 2 de renta fija/monetario: AGGH.MI,
+    XEON.DE): con el tope de 25% por activo, la capacidad maxima combinada de renta fija
+    es 2*0.25=50%, por debajo del 60% que exige Conservador -> INFACTIBLE.
 
-    El optimizador no lanza una excepcion ante esto: `scipy.optimize.minimize`
-    devuelve el mejor punto que encuentra, con `converged=False`. Este test deja
-    constancia objetiva del hallazgo (verificado tambien manualmente con scipy
-    antes de escribir esta subfase) en vez de ocultarlo con una asercion laxa;
-    la correccion (ampliar el universo con mas renta fija, o relajar el tope de
-    25% especificamente para Conservador) es una decision de producto que no
-    corresponde tomar unilateralmente en esta subfase.
+    En la Subfase 3.3 esto se traducia en `converged=False` sin mas explicacion. Desde la
+    Subfase 3.4, `optimize_max_sharpe` valida la factibilidad ANTES de llamar a scipy y
+    lanza `InfeasibleConstraintsError` con un mensaje explicito (ver Parte 2 de esta
+    subfase). Este test fija ese cambio de comportamiento deliberado usando el fixture
+    congelado de 11 activos de la Subfase 3.2/3.3 (que sigue siendo una escena
+    estructuralmente infactible, aunque el universo REAL ya se amplio -- ver el test
+    siguiente para la prueba con el universo real y factible de 13 activos).
     """
     profile_constraints = get_constraints_for_profile(config.PERFIL_CONSERVADOR)
+    with pytest.raises(constraints_module.InfeasibleConstraintsError, match="renta fija"):
+        optimize_max_sharpe(
+            _REAL_UNIVERSE_EXPECTED_RETURNS,
+            _REAL_UNIVERSE_COVARIANCE,
+            _REAL_UNIVERSE_RISK_FREE_RATE,
+            asset_classes=_REAL_UNIVERSE_ASSET_CLASSES,
+            profile_constraints=profile_constraints,
+        )
+
+
+def test_conservador_is_feasible_and_converges_with_the_expanded_13_asset_universe() -> None:
+    """Verifica la solucion adoptada en la Subfase 3.4 (Parte 1): con los 2 ETFs de
+    renta fija añadidos (IBGS.AS, IEAC.AS), el universo pasa a tener 4 activos de renta
+    fija/monetario. Capacidad maxima = 4*0.25 = 100%, muy por encima del 60% exigido ->
+    Conservador ya es factible y el optimizador converge normalmente."""
+    profile_constraints = get_constraints_for_profile(config.PERFIL_CONSERVADOR)
     result = optimize_max_sharpe(
-        _REAL_UNIVERSE_EXPECTED_RETURNS,
-        _REAL_UNIVERSE_COVARIANCE,
-        _REAL_UNIVERSE_RISK_FREE_RATE,
-        asset_classes=_REAL_UNIVERSE_ASSET_CLASSES,
+        real_universe.EXPECTED_RETURNS,
+        real_universe.COVARIANCE_MATRIX,
+        real_universe.RISK_FREE_RATE,
+        asset_classes=real_universe.ASSET_CLASSES,
         profile_constraints=profile_constraints,
     )
 
-    assert result.converged is False  # infactible: no puede alcanzar el 60% exigido
-
-    fixed_income_mask = constraints_module.build_fixed_income_mask(_REAL_UNIVERSE_ASSET_CLASSES)
+    assert result.converged is True
+    fixed_income_mask = constraints_module.build_fixed_income_mask(real_universe.ASSET_CLASSES)
     fixed_income_weight = float(np.dot(fixed_income_mask, result.weights))
-    number_of_fixed_income_assets = int(fixed_income_mask.sum())
-    max_achievable_fixed_income = number_of_fixed_income_assets * profile_constraints.max_weight_per_asset
-
-    assert fixed_income_weight == pytest.approx(max_achievable_fixed_income, abs=1e-3)
-    assert fixed_income_weight < profile_constraints.min_fixed_income_weight
-
-    # Pese a no converger al optimo exacto, las garantias estructurales basicas se mantienen:
+    assert fixed_income_weight >= profile_constraints.min_fixed_income_weight - 1e-4
+    assert result.weights.max() <= profile_constraints.max_weight_per_asset + 1e-6
     metrics.validate_weights_sum_to_one(result.weights)
     metrics.validate_no_short_selling(result.weights)
-    assert result.weights.max() <= profile_constraints.max_weight_per_asset + 1e-3
 
 
 def test_constraints_eliminate_the_extreme_concentration_from_subfase_3_2() -> None:
@@ -306,3 +314,30 @@ def test_constraints_eliminate_the_extreme_concentration_from_subfase_3_2() -> N
     number_of_meaningful_positions_unconstrained = int(np.sum(unconstrained.weights > 0.01))
     number_of_meaningful_positions_constrained = int(np.sum(constrained.weights > 0.01))
     assert number_of_meaningful_positions_constrained > number_of_meaningful_positions_unconstrained
+
+
+# --- Subfase 3.4: universo real completo (13 activos), los 3 perfiles ---
+
+
+@pytest.mark.parametrize(
+    "profile", [config.PERFIL_CONSERVADOR, config.PERFIL_MODERADO, config.PERFIL_AGRESIVO]
+)
+def test_optimizer_converges_for_all_profiles_with_the_real_13_asset_universe(profile: str) -> None:
+    profile_constraints = get_constraints_for_profile(profile)
+    result = optimize_max_sharpe(
+        real_universe.EXPECTED_RETURNS,
+        real_universe.COVARIANCE_MATRIX,
+        real_universe.RISK_FREE_RATE,
+        asset_classes=real_universe.ASSET_CLASSES,
+        profile_constraints=profile_constraints,
+    )
+
+    assert result.converged is True
+    assert len(result.weights) == len(real_universe.TICKERS)
+    metrics.validate_weights_sum_to_one(result.weights)
+    metrics.validate_no_short_selling(result.weights)
+    assert result.weights.max() <= profile_constraints.max_weight_per_asset + 1e-6
+
+    fixed_income_mask = constraints_module.build_fixed_income_mask(real_universe.ASSET_CLASSES)
+    fixed_income_weight = float(np.dot(fixed_income_mask, result.weights))
+    assert fixed_income_weight >= profile_constraints.min_fixed_income_weight - 1e-4
