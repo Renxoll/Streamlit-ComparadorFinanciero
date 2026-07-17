@@ -18,6 +18,13 @@ Desde la Subfase 3.3, `optimize_max_sharpe` acepta opcionalmente un
 activo) para añadir las 3 restricciones adicionales de arriba. Si no se
 pasan (por defecto), el comportamiento es IDÉNTICO al de la Subfase 3.2:
 únicamente `Σw=1` y `w>=0`.
+
+Desde la Subfase 3.4, si se pasan `profile_constraints`, ANTES de invocar a
+`scipy.optimize.minimize` se valida la factibilidad matemática de las bandas
+frente al universo (`portfolio.constraints.validate_constraint_feasibility`).
+Si no hay ninguna solución posible, se lanza `InfeasibleConstraintsError` con
+un mensaje explícito, en vez de dejar que el solver devuelva `converged=False`
+sin explicación.
 """
 from __future__ import annotations
 
@@ -26,7 +33,12 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.optimize import minimize
 
-from portfolio.constraints import ProfileConstraints, build_equity_mask, build_fixed_income_mask
+from portfolio.constraints import (
+    ProfileConstraints,
+    build_equity_mask,
+    build_fixed_income_mask,
+    validate_constraint_feasibility,
+)
 from portfolio.metrics import (
     portfolio_expected_return,
     portfolio_sharpe_ratio,
@@ -125,17 +137,20 @@ def optimize_max_sharpe(
     Returns:
         `OptimizationResult` con los pesos óptimos (suman 1, ninguno negativo,
         y si se pasaron restricciones, ninguno por encima del tope) y las
-        métricas de la cartera resultante. `converged=False` indica que el
-        solver no encontró un punto que satisfaga todas las restricciones
-        simultáneamente (ver nota sobre factibilidad en
-        `docs/markowitz_metodologia.md`); en ese caso `weights` es el mejor
-        punto factible que el solver pudo alcanzar, no el óptimo exacto.
+        métricas de la cartera resultante. `converged=False` puede darse por
+        motivos puramente numéricos (mal condicionamiento, límite de
+        iteraciones); la infactibilidad MATEMÁTICA de las bandas se detecta
+        antes y se señala con `InfeasibleConstraintsError`, no con
+        `converged=False` silencioso.
 
     Raises:
         ValueError: si las dimensiones son incompatibles, si `covariance_matrix`
             no es una matriz de covarianzas válida (no semidefinida positiva),
             o si se pasa `profile_constraints` sin `asset_classes` (o con una
             longitud incompatible).
+        InfeasibleConstraintsError: si se pasan `profile_constraints` y las
+            bandas resultan matemáticamente imposibles con el universo dado
+            (ver `portfolio.constraints.validate_constraint_feasibility`).
     """
     validate_dimensions_match(expected_returns, covariance_matrix)
     validate_positive_semidefinite_covariance(covariance_matrix)
@@ -153,6 +168,7 @@ def optimize_max_sharpe(
                 f"Dimensiones incompatibles: {n_assets} retornos esperados frente a "
                 f"{len(asset_classes)} clases de activo."
             )
+        validate_constraint_feasibility(asset_classes, profile_constraints)
 
     initial_weights = np.full(n_assets, 1.0 / n_assets)
     bounds = _build_weight_bounds(n_assets, profile_constraints)

@@ -104,3 +104,72 @@ def build_equity_mask(asset_classes: np.ndarray) -> np.ndarray:
     return np.array(
         [1.0 if asset_class == config.CLASE_RENTA_VARIABLE else 0.0 for asset_class in asset_classes]
     )
+
+
+class InfeasibleConstraintsError(Exception):
+    """Las bandas de `ProfileConstraints` son matemáticamente imposibles de satisfacer
+    con el universo de activos disponible, independientemente de lo que haga el
+    optimizador (no es un problema de convergencia numérica).
+    """
+
+
+# Margen de tolerancia para comparaciones de punto flotante en las comprobaciones de
+# factibilidad (evita falsos positivos/negativos por redondeo binario de los porcentajes).
+_FEASIBILITY_TOLERANCE = 1e-9
+
+
+def validate_constraint_feasibility(asset_classes: np.ndarray, profile_constraints: ProfileConstraints) -> None:
+    """Verifica, ANTES de invocar al optimizador, si las bandas de `profile_constraints`
+    tienen alguna solución posible dado el universo de `asset_classes`.
+
+    Comprueba las 3 condiciones necesarias y suficientes para que exista al menos un
+    vector de pesos `w` que cumpla simultáneamente `sum(w)=1`, `0 <= w_i <= max_weight_per_asset`
+    y las bandas de composición renta fija/renta variable:
+
+    1. Capacidad de renta fija: ¿hay suficientes activos de renta fija/monetario para
+       alcanzar, entre todos y con el tope por activo, el mínimo exigido?
+    2. Capacidad total: ¿el tope por activo, multiplicado por el número de activos del
+       universo, permite siquiera completar el 100% de la cartera?
+    3. Bandas no contradictorias: ¿el mínimo de renta fija más el máximo de renta
+       variable suman, como mínimo, el 100% de la cartera?
+
+    Args:
+        asset_classes: vector (n_activos,) con la clase de cada activo del universo
+            considerado (antes de optimizar).
+        profile_constraints: bandas del perfil a validar.
+
+    Raises:
+        InfeasibleConstraintsError: con un mensaje que explica exactamente qué
+            condición falla, si no existe ninguna solución posible.
+    """
+    n_total_assets = len(asset_classes)
+    n_fixed_income_assets = int(np.sum(build_fixed_income_mask(asset_classes)))
+    cap = profile_constraints.max_weight_per_asset
+    min_fixed_income = profile_constraints.min_fixed_income_weight
+    max_equity = profile_constraints.max_equity_weight
+    profile = profile_constraints.profile
+
+    max_achievable_fixed_income = n_fixed_income_assets * cap
+    if max_achievable_fixed_income < min_fixed_income - _FEASIBILITY_TOLERANCE:
+        raise InfeasibleConstraintsError(
+            f"El perfil {profile} requiere al menos {min_fixed_income:.0%} en renta fija, "
+            f"pero el universo actual solo permite un máximo del {max_achievable_fixed_income:.0%} "
+            f"({n_fixed_income_assets} activo(s) de renta fija/monetario x {cap:.0%} de peso "
+            f"máximo por activo)."
+        )
+
+    max_total_capacity = n_total_assets * cap
+    if max_total_capacity < 1.0 - _FEASIBILITY_TOLERANCE:
+        raise InfeasibleConstraintsError(
+            f"El perfil {profile} tiene un peso máximo de {cap:.0%} por activo, pero el "
+            f"universo solo tiene {n_total_assets} activo(s): la capacidad máxima combinada "
+            f"es {max_total_capacity:.0%}, insuficiente para completar el 100% de la cartera."
+        )
+
+    if min_fixed_income + max_equity < 1.0 - _FEASIBILITY_TOLERANCE:
+        raise InfeasibleConstraintsError(
+            f"Las bandas del perfil {profile} son contradictorias: el mínimo de renta fija "
+            f"({min_fixed_income:.0%}) más el máximo de renta variable ({max_equity:.0%}) "
+            f"suman {min_fixed_income + max_equity:.0%}, menos del 100% necesario para "
+            f"completar la cartera."
+        )
