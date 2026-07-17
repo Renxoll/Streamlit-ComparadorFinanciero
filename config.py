@@ -24,8 +24,20 @@ CLASE_RENTA_FIJA = "Renta Fija"
 CLASE_MONETARIO = "Monetario"
 
 # --- Universo de activos. Bancos y aseguradoras UE (sin cambios desde el modelo original)
-#     ampliado en la Fase 3 con 4 ETFs UCITS diversificados, sin apalancamiento ni derivados,
-#     verificados contra Yahoo Finance (5 años de historico completo a fecha de esta fase). ---
+#     ampliado en la Fase 3 con ETFs UCITS diversificados, sin apalancamiento ni derivados,
+#     verificados uno a uno contra Yahoo Finance (5 años de historico completo).
+#
+#     Subfase 3.4: se añaden 2 ETFs de renta fija adicionales (IBGS.AS, IEAC.AS). Motivo:
+#     con un unico ETF de renta fija (AGGH.MI) + 1 monetario (XEON.DE), el perfil
+#     Conservador (piso de renta fija+monetario >= 60%, tope de 25% por activo) era
+#     matematicamente INFACTIBLE: 2 activos x 25% = 50% maximo alcanzable, por debajo
+#     del 60% exigido (hallazgo documentado en la Subfase 3.3). Con 4 activos de renta
+#     fija/monetario, la capacidad maxima sube a 4 x 25% = 100%, cubriendo el 60% con
+#     margen. Los 2 ETFs nuevos diversifican genuinamente respecto a AGGH.MI (no son
+#     duplicados): IBGS.AS es deuda publica euro de CORTO plazo (baja duracion, vol.
+#     anual ~1.6% frente al ~4.7% de AGGH.MI), IEAC.AS es renta fija CORPORATIVA euro
+#     (riesgo de credito, no solo de tipos), con correlaciones de 0.65-0.74 frente a
+#     AGGH.MI -- suficientemente distintas para aportar diversificacion real. ---
 UNIVERSO_TFM: list[dict[str, str]] = [
     {"Sector": "Banco", "Empresa": "Banco Santander", "Ticker": "SAN.MC", "Producto": "Accion ordinaria - entidad bancaria", "Clase de activo": CLASE_RENTA_VARIABLE},
     {"Sector": "Banco", "Empresa": "BNP Paribas", "Ticker": "BNP.PA", "Producto": "Accion ordinaria - entidad bancaria", "Clase de activo": CLASE_RENTA_VARIABLE},
@@ -37,6 +49,8 @@ UNIVERSO_TFM: list[dict[str, str]] = [
     {"Sector": "ETF Renta Variable Global", "Empresa": "iShares Core MSCI World UCITS ETF", "Ticker": "EUNL.DE", "Producto": "ETF UCITS - renta variable global diversificada", "Clase de activo": CLASE_RENTA_VARIABLE},
     {"Sector": "ETF Renta Variable Europa", "Empresa": "iShares Core EURO STOXX 50 UCITS ETF", "Ticker": "EXW1.DE", "Producto": "ETF UCITS - renta variable zona euro", "Clase de activo": CLASE_RENTA_VARIABLE},
     {"Sector": "ETF Renta Fija", "Empresa": "iShares Core Global Aggregate Bond UCITS ETF (EUR Hedged)", "Ticker": "AGGH.MI", "Producto": "ETF UCITS - renta fija agregada global, cubierta a EUR", "Clase de activo": CLASE_RENTA_FIJA},
+    {"Sector": "ETF Renta Fija Corto Plazo", "Empresa": "iShares Euro Government Bond 1-3yr UCITS ETF", "Ticker": "IBGS.AS", "Producto": "ETF UCITS - deuda publica euro de corto plazo (1-3 años)", "Clase de activo": CLASE_RENTA_FIJA},
+    {"Sector": "ETF Renta Fija Corporativa", "Empresa": "iShares Core EUR Corporate Bond UCITS ETF", "Ticker": "IEAC.AS", "Producto": "ETF UCITS - renta fija corporativa investment grade en euros", "Clase de activo": CLASE_RENTA_FIJA},
     {"Sector": "ETF Monetario", "Empresa": "Xtrackers II EUR Overnight Rate Swap UCITS ETF", "Ticker": "XEON.DE", "Producto": "ETF UCITS - monetario EUR (tipo a un dia)", "Clase de activo": CLASE_MONETARIO},
 ]
 
