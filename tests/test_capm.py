@@ -140,8 +140,8 @@ class _FakeService:
 
 
 _TEST_UNIVERSE = [
-    {"Sector": "Banco", "Empresa": "Banco Test", "Ticker": "BANK.MC", "Producto": "Acción"},
-    {"Sector": "Seguros", "Empresa": "Seguro Test", "Ticker": "INS.MC", "Producto": "Acción"},
+    {"Sector": "Banco", "Empresa": "Banco Test", "Ticker": "BANK.MC", "Producto": "Acción", "Clase de activo": config.CLASE_RENTA_VARIABLE},
+    {"Sector": "Seguros", "Empresa": "Seguro Test", "Ticker": "INS.MC", "Producto": "Acción", "Clase de activo": config.CLASE_RENTA_VARIABLE},
 ]
 
 
@@ -167,6 +167,7 @@ def test_build_universe_metrics_produces_one_row_per_asset() -> None:
     assert len(result) == 2
     assert set(result["Sector"]) == {"Banco", "Seguros"}
     assert (result[config.COL_PERFIL_OBJETIVO] == config.PERFIL_MODERADO).all()
+    assert (result[config.COL_CLASE_ACTIVO] == config.CLASE_RENTA_VARIABLE).all()
 
 
 @pytest.mark.parametrize(
