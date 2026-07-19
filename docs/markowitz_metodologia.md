@@ -107,13 +107,25 @@ Notación: `w` = vector de pesos de la cartera (uno por activo), `μ` = vector d
 ```
 E[R_i] = Rf + β_i · (Rm − Rf)
 ```
-`Rm − Rf` es la prima de riesgo de mercado, introducida por el usuario en la Hoja 1. Implementado en `core/capm.py::capm_expected_return`.
+Implementado en `core/capm.py::capm_expected_return`, sin ninguna aproximación adicional: la función recibe `Rf` y `(Rm − Rf)` ya calculados y aplica la fórmula tal cual.
+
+Desde la Subfase 5.1, `Rf` y `Rm` son **constantes fijas**, no un input manual del usuario (antes, un `st.number_input` en la Hoja 1 permitía cambiarlos en cada ejecución, lo que impedía reproducir exactamente el mismo resultado entre evaluaciones distintas):
+
+| Parámetro | Valor | Constante |
+|---|---|---|
+| `Rf` (tasa libre de riesgo anual) | 2,3% | `config.RISK_FREE_RATE` |
+| `Rm` (rentabilidad de mercado anual) | 8,0% | `config.MARKET_RETURN` |
+| `Rm − Rf` (prima de riesgo, la que consume `capm_expected_return`) | 5,7% | `config.MARKET_RISK_PREMIUM` (derivada de las dos anteriores, no un tercer número suelto) |
+
+Son referencias representativas del mercado europeo en la fecha de elaboración del proyecto, no datos de mercado en vivo — el mismo disclaimer se muestra en la Hoja 1 (`config.CAPM_ASSUMPTIONS_DISCLAIMER`).
 
 **Beta de un activo**
 ```
 β_i = Cov(R_i, R_m) / Var(R_m)
 ```
-calculada sobre series de retornos diarios de 5 años, alineadas por fecha con el benchmark (Euro Stoxx 50). Implementado en `core/capm.py::compute_beta`.
+Estimada empíricamente con datos históricos: series de retornos diarios de 5 años, alineadas por fecha con el benchmark (Euro Stoxx 50). Es el único componente de `E[R_i]` que varía por activo — `Rf` y `Rm` son los mismos para todos. Implementado en `core/capm.py::compute_beta`.
+
+**Importante — separación entre CAPM y la optimización:** `E[R_i]` se calcula por completo ANTES de optimizar, en `core/capm.py::build_universe_metrics` (capa `core/`, sin ningún conocimiento de carteras). El optimizador de Markowitz (`portfolio/optimizer.py`) recibe el vector `μ` de retornos esperados ya calculado como uno de sus 3 argumentos de entrada (junto con `Σ` y `Rf`) y lo usa tal cual en su función objetivo — **no vuelve a calcular ningún retorno por su cuenta**. Esta separación es la misma que describe la sección 2 (Arquitectura): `core/` calcula "cuánto se espera que rinda cada activo"; `portfolio/` decide "cuánto peso poner en cada uno", sin mezclar ambas responsabilidades en el mismo módulo.
 
 **Retorno esperado de la cartera**
 ```
@@ -181,6 +193,20 @@ El peso máximo por activo se implementa como `bounds` (no como una restricción
 | Agresivo | 45% | 10% | 90% | Crecimiento: se permite mayor concentración y mayor exposición a renta variable, manteniendo un piso mínimo de liquidez/seguridad. |
 
 Justificación financiera: el piso de renta fija/monetario y el techo de renta variable son complementarios por diseño (suman exactamente 100% en los 3 perfiles), de modo que ambas restricciones codifican la misma política de asignación de capital vista desde dos ángulos — no son reglas independientes que puedan entrar en conflicto entre sí. El peso máximo por activo crece con el apetito de riesgo del perfil: un Conservador nunca debería depender en exceso de un único emisor o instrumento, mientras que un Agresivo, que ya asume más riesgo de mercado por diseño, puede razonablemente concentrar más en las mejores oportunidades identificadas por el modelo.
+
+### Por qué 25% / 35% / 45%, específicamente
+
+Los tres topes están directamente relacionados con el problema que describe **Michaud (1989, "The Markowitz Optimization Enigma: Is 'Optimized' Optimal?")**: la optimización de media-varianza sin restricciones es extremadamente sensible a errores de estimación en los retornos esperados — pequeñas diferencias en `μ` (que siempre existen, al venir de una estimación histórica, no de un valor cierto) empujan al optimizador hacia soluciones de esquina, concentrando el resultado en muy pocos activos aunque la diferencia real de calidad entre ellos y el resto sea mínima. Michaud lo llama la "maximización de errores": el optimizador no distingue entre una diferencia de retorno esperado genuina y el ruido de la propia estimación, y trata ambas como si fueran igual de fiables.
+
+Los tres objetivos que persigue limitar el peso máximo por activo, en línea con ese problema:
+
+- **Evitar concentración excesiva**: ningún perfil permite que un único activo supere el 45% de la cartera (Agresivo), ni el 25% en Conservador. Es una cota dura, no una preferencia: el optimizador no puede violarla aunque matemáticamente "quisiera" concentrar más (se implementa como `bounds` de scipy, sección 5).
+- **Reducir la sensibilidad a errores de estimación**: cuanto más conservador el perfil, más bajo el tope (25% frente a 45%) — precisamente porque un inversor conservador es el que menos margen tiene para absorber el efecto de un error de estimación en el activo que el modelo cree, erróneamente, que es el mejor.
+- **Mejorar la diversificación**: con un tope de 25%, la cartera de Conservador necesita, por aritmética, al menos 4 posiciones distintas para completar el 100%; con 45% (Agresivo), basta con 3 — es decir, el tope no solo limita el riesgo de un único activo, también fuerza un número mínimo de posiciones independientes, coherente con el principio de diversificación de Markowitz (1952) que fundamenta todo el modelo.
+
+Se comprobó empíricamente en la Subfase 3.2 (antes de introducir estos topes) que, sin ninguna restricción de concentración, el optimizador llegó a poner el 97% de la cartera en 2 activos de los 11 disponibles en ese momento — la manifestación exacta del problema de Michaud sobre datos reales de este proyecto, no solo una advertencia teórica.
+
+Los valores concretos (25/35/45) no proceden de una fórmula cerrada de la literatura — Michaud no prescribe un número exacto, solo demuestra la necesidad de acotar — sino de una escala creciente y proporcional al apetito de riesgo de cada perfil, con Moderado como punto intermedio razonable entre los dos extremos.
 
 Estas bandas, y no un filtro de elegibilidad individual por Beta, son las que realmente diferencian las 3 carteras resultantes (ver limitación conocida en la sección 8).
 
