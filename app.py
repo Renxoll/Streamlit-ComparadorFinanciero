@@ -32,7 +32,6 @@ from ui.sections import (
 st.set_page_config(page_title=config.APP_TITLE, layout="wide")
 
 st.title("Sistema de Recomendación y Optimización de Inversión")
-st.caption("Máster Universitario en Ciencias Actuariales y Financieras (MUCAF) - Universidad de León")
 
 # --- Control de simulación (Subfase 5.1) ---
 # Streamlit persiste `session_state` (y el valor de los widgets, aunque no tengan `key`
@@ -67,7 +66,7 @@ def _cached_universe_metrics(risk_free_rate: float, market_premium: float, inves
     service = MarketDataService()
     return capm.build_universe_metrics(
         service=service,
-        universe=config.UNIVERSO_TFM,
+        universe=config.UNIVERSO_ACTIVOS,
         benchmark_ticker=config.BENCHMARK_TICKER,
         risk_free_rate=risk_free_rate,
         market_premium=market_premium,

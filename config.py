@@ -6,8 +6,6 @@ solo contiene valores estaticos reutilizados por el resto de capas.
 from __future__ import annotations
 
 # --- Metadatos de la aplicacion ---
-# Nota: el branding TFM se mantiene en esta fase por instruccion explicita de no
-# introducir cambios visibles. Se retira en la Fase 5 (observacion 1 del tutor).
 APP_TITLE = "Carteras e Interfaz Inversor"
 
 # --- Parametros de mercado ---
@@ -61,7 +59,7 @@ CLASE_MONETARIO = "Monetario"
 #     anual ~1.6% frente al ~4.7% de AGGH.MI), IEAC.AS es renta fija CORPORATIVA euro
 #     (riesgo de credito, no solo de tipos), con correlaciones de 0.65-0.74 frente a
 #     AGGH.MI -- suficientemente distintas para aportar diversificacion real. ---
-UNIVERSO_TFM: list[dict[str, str]] = [
+UNIVERSO_ACTIVOS: list[dict[str, str]] = [
     {"Sector": "Banco", "Empresa": "Banco Santander", "Ticker": "SAN.MC", "Producto": "Accion ordinaria - entidad bancaria", "Clase de activo": CLASE_RENTA_VARIABLE},
     {"Sector": "Banco", "Empresa": "BNP Paribas", "Ticker": "BNP.PA", "Producto": "Accion ordinaria - entidad bancaria", "Clase de activo": CLASE_RENTA_VARIABLE},
     {"Sector": "Banco", "Empresa": "ING Groep", "Ticker": "INGA.AS", "Producto": "Accion ordinaria - entidad bancaria", "Clase de activo": CLASE_RENTA_VARIABLE},
