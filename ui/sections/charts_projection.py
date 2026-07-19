@@ -1,97 +1,67 @@
-"""Hoja 5: proyeccion y graficos.
+"""Hoja 5: proyección y gráficos de la cartera optimizada.
 
-Fase 1: se mantiene la formula de proyeccion original, que aplica el capital
-COMPLETO a cada escenario (banco solo / seguro solo / cartera combinada). La
-correccion para proyectar el capital efectivamente asignado a cada activo
-(observacion 7 del tutor) se implementa en la Fase 4.
+Adaptada en la Subfase 3.5 para consumir `PortfolioAllocation` (N activos)
+en vez de la antigua heurística de 2 activos (`MarkowitzSelection`). No se
+recalcula nada nuevo: se reutiliza `core.projections.project_compound_growth`
+(sin cambios desde la Fase 1) sobre el capital y la rentabilidad esperada
+YA calculados por `portfolio.allocation.build_portfolio_allocation`.
 
-Nota de auditoria (se corrige tambien en la Fase 4, no aqui): la fila
-"Referencia conjunta" de la tabla comparativa combina una rentabilidad
-calculada siempre a pesos 50/50 con una volatilidad conjunta calculada con
-los pesos reales del slider de la Hoja 4 — esa inconsistencia ya existia en
-el `app.py` original y se preserva intencionadamente en esta fase para no
-alterar el comportamiento visible.
+Limitación conocida, heredada y NO resuelta en esta subfase: la proyección
+sigue aplicando una única tasa (la rentabilidad esperada agregada de la
+cartera) al capital total, en vez de proyectar cada posición con su capital
+asignado y sumar los resultados — matemáticamente más correcto para
+horizontes de varios años (observación 7 del tutor, señalada desde la
+auditoría inicial). Esa corrección requiere una fase propia centrada en el
+modelo de proyección; no forma parte del alcance de "integrar el
+optimizador en la UI".
 """
 from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
 
-import config
-from core.models import InvestorInputs, MarkowitzSelection
-from core.projections import blended_annual_rate, project_compound_growth
+from core.models import InvestorInputs
+from core.projections import project_compound_growth
+from portfolio.allocation import PortfolioAllocation
+from ui.components import format_decimal, format_percentage
 
-_PESO_REFERENCIA_50_50 = 0.5
 
-
-def render(investor: InvestorInputs, selection: MarkowitzSelection) -> None:
-    """Renderiza las proyecciones de capital y la tabla comparativa de indicadores."""
+def render(investor: InvestorInputs, allocation: PortfolioAllocation) -> None:
+    """Renderiza la proyección de capital y el resumen de la cartera optimizada."""
     st.header("HOJA 5: VISUALIZACIÓN DE RESULTADOS")
 
     anios = list(range(int(investor.plazo) + 1))
-    proy_banco = project_compound_growth(
-        investor.importe, selection.mejor_banco[config.COL_CAPM], investor.plazo
-    )
-    proy_seguro = project_compound_growth(
-        investor.importe, selection.mejor_seguro[config.COL_CAPM], investor.plazo
-    )
-
-    rentabilidad_50_50 = blended_annual_rate(
-        selection.mejor_banco[config.COL_CAPM], _PESO_REFERENCIA_50_50,
-        selection.mejor_seguro[config.COL_CAPM], _PESO_REFERENCIA_50_50,
-    )
-    proy_cartera = project_compound_growth(investor.importe, rentabilidad_50_50, investor.plazo)
-
-    df_proyeccion = pd.DataFrame({
-        "Año": anios,
-        f"{selection.mejor_banco[config.COL_EMPRESA]}": proy_banco,
-        f"{selection.mejor_seguro[config.COL_EMPRESA]}": proy_seguro,
-        "Cartera Referencial (50% / 50%)": proy_cartera,
-    })
+    proyeccion = project_compound_growth(allocation.total_capital, allocation.expected_return, investor.plazo)
+    df_proyeccion = pd.DataFrame({"Año": anios, "Cartera optimizada": proyeccion})
 
     col_tabla_proy, col_indicadores = st.columns([1.3, 1.7])
 
     with col_tabla_proy:
         st.subheader("Proyección de Capital (€)")
         st.dataframe(
-            df_proyeccion.style.format({col: "{:,.2f} €" for col in df_proyeccion.columns if col != "Año"}),
+            df_proyeccion.style.format({"Cartera optimizada": "{:,.2f} €"}),
             hide_index=True,
         )
 
     with col_indicadores:
-        st.subheader("Tabla de Resumen Comparativo")
-        sharpe_referencia = (
-            (rentabilidad_50_50 - investor.risk_free_rate) / selection.volatilidad_conjunta
-            if selection.volatilidad_conjunta
-            else 0.0
-        )
-        df_ind = pd.DataFrame({
-            "Indicador": ["Empresa / producto", "Sector", "Beta", "Volatilidad anual", "Rentabilidad CAPM", "Sharpe individual"],
-            "Banco seleccionado": [
-                selection.mejor_banco[config.COL_EMPRESA], "Banco",
-                f"{selection.mejor_banco[config.COL_BETA]:.4f}",
-                f"{selection.mejor_banco[config.COL_VOL_ANUAL]:.4f}",
-                f"{selection.mejor_banco[config.COL_CAPM] * 100:.2f}%",
-                f"{selection.mejor_banco[config.COL_SHARPE]:.4f}",
+        st.subheader("Resumen de la cartera")
+        df_resumen = pd.DataFrame({
+            "Indicador": [
+                "Capital total", "Rentabilidad esperada", "Volatilidad", "Beta de cartera",
+                "Sharpe de cartera", "% Renta Variable", "% Renta Fija", "% Monetario",
             ],
-            "Aseguradora seleccionada": [
-                selection.mejor_seguro[config.COL_EMPRESA], "Seguros",
-                f"{selection.mejor_seguro[config.COL_BETA]:.4f}",
-                f"{selection.mejor_seguro[config.COL_VOL_ANUAL]:.4f}",
-                f"{selection.mejor_seguro[config.COL_CAPM] * 100:.2f}%",
-                f"{selection.mejor_seguro[config.COL_SHARPE]:.4f}",
+            "Valor": [
+                f"{allocation.total_capital:,.2f} €",
+                format_percentage(allocation.expected_return),
+                format_percentage(allocation.volatility),
+                format_decimal(allocation.beta),
+                format_decimal(allocation.sharpe_ratio),
+                format_percentage(allocation.equity_percentage, decimals=1),
+                format_percentage(allocation.fixed_income_percentage, decimals=1),
+                format_percentage(allocation.money_market_percentage, decimals=1),
             ],
-            "Referencia conjunta (50/50)": [
-                f"{selection.mejor_banco[config.COL_EMPRESA]} + {selection.mejor_seguro[config.COL_EMPRESA]}",
-                "Banco + Seguros",
-                f"{(selection.mejor_banco[config.COL_BETA] + selection.mejor_seguro[config.COL_BETA]) / 2:.4f}",
-                f"{selection.volatilidad_conjunta:.4f}",
-                f"{rentabilidad_50_50 * 100:.2f}%",
-                f"{sharpe_referencia:.4f}",
-            ],
-            "Observación": ["Selección final por sector", "Universo UE (bancos y aseguradoras)", "Según criterio del perfil actual", "Riesgo diversificado", "Modelo CAPM", "Rentabilidad-Riesgo"],
         })
-        st.dataframe(df_ind, hide_index=True, use_container_width=True)
+        st.dataframe(df_resumen, hide_index=True, use_container_width=True)
 
     st.subheader("Evolución temporal del capital invertido")
     st.line_chart(df_proyeccion.set_index("Año"))
