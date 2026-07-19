@@ -102,35 +102,20 @@ def is_eligible_for_profile(
     return lower_bound <= beta <= upper_bound
 
 
-def describe_beta_criterion(profile: str) -> str:
-    """Texto descriptivo del criterio de Beta aplicado, coherente con `is_eligible_for_profile`."""
-    lower = config.BETA_ELIGIBILITY_LOWER_BOUND
-    upper = config.BETA_ELIGIBILITY_UPPER_BOUND
-    if profile == config.PERFIL_CONSERVADOR:
-        return f"Beta baja (≤ {lower:.2f}): prioriza protección de capital"
-    if profile == config.PERFIL_AGRESIVO:
-        return f"Beta alta (≥ {upper:.2f}): prioriza sensibilidad al mercado"
-    return f"Beta cercana a 1 ({lower:.2f}-{upper:.2f}): riesgo similar al mercado"
-
-
 def annualized_covariance(returns_a: pd.Series, returns_b: pd.Series) -> float:
-    """Covarianza anualizada entre dos series de retornos diarios ya alineables."""
+    """Covarianza anualizada entre dos series de retornos diarios ya alineables.
+
+    Nota (Subfase 3.5): ya no se usa en la UI (la construcción de cartera usa
+    `portfolio.covariance.build_annualized_covariance_matrix` para N activos).
+    Se conserva porque `tests/test_covariance.py` la usa como oráculo
+    independiente para verificar, par a par, que la matriz de covarianzas
+    coincide con este cálculo de referencia — no es código muerto, es una
+    utilidad de verificación cruzada.
+    """
     aligned = pd.concat([returns_a, returns_b], axis=1).dropna()
     aligned.columns = ["a", "b"]
     covariance_ab = float(aligned.cov().loc["a", "b"])  # type: ignore[arg-type]  # ver nota en compute_beta
     return covariance_ab * TRADING_DAYS_PER_YEAR
-
-
-def combined_portfolio_volatility(
-    vol_a: float, weight_a: float, vol_b: float, weight_b: float, covariance_ab: float
-) -> float:
-    """Volatilidad de una cartera de 2 activos (formula clasica de varianza de cartera)."""
-    variance = (
-        (weight_a**2 * vol_a**2)
-        + (weight_b**2 * vol_b**2)
-        + (2 * weight_a * weight_b * covariance_ab)
-    )
-    return float(np.sqrt(variance))
 
 
 def build_universe_metrics(
