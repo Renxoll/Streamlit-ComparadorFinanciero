@@ -98,7 +98,7 @@ El resultado (`InvestorProfileResult`) incluye, por cada una de las 7 dimensione
 - `weight`: el peso de la dimensión.
 - `weighted_contribution`: `internal_score × weight`, es decir, cuánto aportó esa dimensión concreta a la puntuación final.
 
-Esto permite reconstruir, para cualquier resultado, exactamente cómo se llegó a él — imprescindible tanto para depurar el modelo como para justificar la recomendación ante el usuario o ante un tribunal de TFM.
+Esto permite reconstruir, para cualquier resultado, exactamente cómo se llegó a él — imprescindible tanto para depurar el modelo como para justificar la recomendación ante el usuario.
 
 ## 8. Ejemplos completos de cálculo
 

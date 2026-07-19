@@ -7,7 +7,7 @@ aparecer como un numero suelto en `core/risk_profile.py`: si se quiere
 auditar, justificar o modificar el modelo, este es el unico archivo a revisar.
 
 Ver `docs/perfil_inversor_metodologia.md` para la explicacion metodologica
-completa (con ejemplos de calculo), pensada para incorporarse al TFM.
+completa, con ejemplos de calculo.
 """
 from __future__ import annotations
 
