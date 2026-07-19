@@ -94,12 +94,47 @@ def is_eligible_for_profile(
     Conservador (beta <= lower_bound), Moderado (lower_bound <= beta <= upper_bound),
     Agresivo (beta >= upper_bound). Sustituye a `is_eligible_moderate_profile`, que
     solo sabia evaluar la banda Moderado (ver nota en `score_for_profile`).
+
+    Nota (Fase 5): esta funcion pertenece al diseño historico del proyecto (Fase 2) y
+    actualmente NO participa en la optimizacion de carteras — `portfolio/optimizer.py`
+    recibe el universo completo y usa exclusivamente `portfolio.constraints.ProfileConstraints`
+    para diferenciar los 3 perfiles (ver Subfase 3.5). Tampoco alimenta ya la Hoja 3: la
+    columna "Elegible para el perfil" (Sí/No) fue sustituida por una clasificacion
+    descriptiva de riesgo (ver `describe_beta_profile`), que usa umbrales distintos e
+    independientes de los de esta funcion. Se conserva sin cambios por compatibilidad
+    (la usan `portfolio.constraints.is_asset_eligible_for_profile` y su suite de tests).
     """
     if profile == config.PERFIL_CONSERVADOR:
         return beta <= lower_bound
     if profile == config.PERFIL_AGRESIVO:
         return beta >= upper_bound
     return lower_bound <= beta <= upper_bound
+
+
+def describe_beta_profile(
+    beta: float,
+    lower_bound: float = config.BETA_RISK_LOWER_BOUND,
+    upper_bound: float = config.BETA_RISK_UPPER_BOUND,
+) -> str:
+    """Clasifica el comportamiento relativo de un activo frente al mercado segun su Beta.
+
+    Devuelve una de las 3 etiquetas normativas de perfil (`config.PERFIL_CONSERVADOR`,
+    `config.PERFIL_MODERADO`, `config.PERFIL_AGRESIVO`) como descripcion de riesgo:
+    beta < lower_bound -> Conservador (defensivo), lower_bound <= beta <= upper_bound ->
+    Moderado (comportamiento de mercado), beta > upper_bound -> Agresivo (mas sensible
+    al mercado).
+
+    Es puramente informativa (Hoja 3, Fase 5): NO determina si un activo entra en la
+    cartera, no afecta a pesos ni a restricciones, y no debe confundirse con
+    `is_eligible_for_profile` (criterio distinto, con umbrales distintos, que tampoco
+    participa en la optimizacion). La construccion de la cartera depende exclusivamente
+    de `portfolio/optimizer.py` y de `portfolio.constraints.ProfileConstraints`.
+    """
+    if beta < lower_bound:
+        return config.PERFIL_CONSERVADOR
+    if beta > upper_bound:
+        return config.PERFIL_AGRESIVO
+    return config.PERFIL_MODERADO
 
 
 def annualized_covariance(returns_a: pd.Series, returns_b: pd.Series) -> float:
@@ -130,9 +165,10 @@ def build_universe_metrics(
     """Orquesta la descarga y el calculo CAPM completo para cada activo del universo.
 
     Reemplaza a `procesar_universo` del `app.py` original. A partir de la Fase 2,
-    `investor_profile` determina el score y la elegibilidad de cada activo
-    (antes, ambos se calculaban SIEMPRE con la formula de "Moderado", sin importar
-    el resultado real del cuestionario).
+    `investor_profile` determina el score de cada activo (antes se calculaba SIEMPRE
+    con la formula de "Moderado", sin importar el resultado real del cuestionario).
+    La clasificacion de riesgo por Beta (`describe_beta_profile`) es independiente del
+    perfil: describe el activo en si mismo, no su idoneidad para `investor_profile`.
     """
     market_returns = service.get_returns(benchmark_ticker, period)
 
@@ -161,7 +197,7 @@ def build_universe_metrics(
             config.COL_CAPM: expected_return,
             config.COL_SHARPE: sharpe_ratio(expected_return, risk_free_rate, annual_volatility),
             config.COL_SCORE_PERFIL: score_for_profile(beta, annual_volatility, investor_profile),
-            config.COL_ELEGIBLE_PERFIL: "Sí" if is_eligible_for_profile(beta, investor_profile) else "No",
+            config.COL_PERFIL_RIESGO_BETA: describe_beta_profile(beta),
         })
 
     return pd.DataFrame(rows)
