@@ -85,10 +85,19 @@ with tab3:
     products_by_profile.render(universe_metrics, investor.plazo, st.session_state.perfil_calc)
 
 with tab4:
-    markowitz_selection = markowitz_portfolio.render(universe_metrics, investor.risk_free_rate)
+    allocation = markowitz_portfolio.render(universe_metrics, investor, st.session_state.perfil_calc)
 
+# `allocation` es None solo si las restricciones del perfil no son factibles con el
+# universo actual (ver InfeasibleConstraintsError en Hoja 4); en ese caso no hay
+# cartera que proyectar ni resumir.
 with tab5:
-    charts_projection.render(investor, markowitz_selection)
+    if allocation is not None:
+        charts_projection.render(investor, allocation)
+    else:
+        st.info("No hay una cartera optimizada disponible para este perfil (ver Hoja 4).")
 
 with tab6:
-    summary_export.render(investor, markowitz_selection)
+    if allocation is not None:
+        summary_export.render(investor, allocation)
+    else:
+        st.info("No hay una cartera optimizada disponible para este perfil (ver Hoja 4).")
