@@ -80,15 +80,26 @@ PERFIL_CONSERVADOR = "Conservador"
 PERFIL_MODERADO = "Moderado"
 PERFIL_AGRESIVO = "Agresivo"
 
-# --- Fronteras de elegibilidad de activos por Beta.
-#     Particion continua y sin solapes del eje de Beta en 3 bandas (Fase 2):
+# --- Fronteras de elegibilidad de activos por Beta (diseño histórico, Fase 2).
+#     Particion continua y sin solapes del eje de Beta en 3 bandas:
 #       Conservador: beta <= BETA_ELIGIBILITY_LOWER_BOUND
 #       Moderado:    BETA_ELIGIBILITY_LOWER_BOUND <= beta <= BETA_ELIGIBILITY_UPPER_BOUND
 #       Agresivo:    beta >= BETA_ELIGIBILITY_UPPER_BOUND
 #     Los valores se heredan sin cambios del modelo original (que solo definia la banda
-#     Moderado); ver core/capm.py::is_eligible_for_profile. ---
+#     Moderado); ver core/capm.py::is_eligible_for_profile. Desde la Subfase 3.5 esta
+#     particion NO participa en la optimizacion de carteras (ver portfolio/optimizer.py)
+#     ni en la Hoja 3 (ver BETA_RISK_LOWER_BOUND/BETA_RISK_UPPER_BOUND mas abajo, que son
+#     un criterio distinto y no relacionado). Se conserva sin cambios por compatibilidad. ---
 BETA_ELIGIBILITY_LOWER_BOUND = 0.75
 BETA_ELIGIBILITY_UPPER_BOUND = 1.25
+
+# --- Umbrales de la clasificacion DESCRIPTIVA de riesgo por Beta (Hoja 3, Fase 5).
+#     Sustituyen a la columna "Elegible perfil actual" (Sí/No, ver BETA_ELIGIBILITY_*
+#     arriba): no son fronteras de inclusion/exclusion de ningun activo, solo una
+#     etiqueta informativa de comportamiento relativo frente al mercado. Ver
+#     core/capm.py::describe_beta_profile y docs/markowitz_metodologia.md. ---
+BETA_RISK_LOWER_BOUND = 0.80  # beta < 0.80 -> Conservador (comportamiento defensivo)
+BETA_RISK_UPPER_BOUND = 1.20  # beta > 1.20 -> Agresivo (mayor sensibilidad al mercado)
 
 # --- Nombres de columnas del DataFrame de universo, centralizados para evitar
 #     errores de tipeo al compartirse entre core/capm.py y ui/sections/*.py ---
@@ -107,4 +118,7 @@ COL_SHARPE = "Sharpe individual CAPM"
 # Antes "Score moderado" / "Elegible perfil moderado": se generalizan en la Fase 2 porque
 # ahora reflejan el perfil REAL calculado, no siempre "Moderado" (bug corregido).
 COL_SCORE_PERFIL = "Score perfil"
-COL_ELEGIBLE_PERFIL = "Elegible perfil actual"
+# Antes "Elegible perfil actual" (Sí/No): sustituida en la Fase 5 por una clasificacion
+# descriptiva de 3 valores (Conservador/Moderado/Agresivo) que no implica inclusion o
+# exclusion de la cartera — ver describe_beta_profile en core/capm.py.
+COL_PERFIL_RIESGO_BETA = "Perfil de riesgo (Beta)"
