@@ -8,12 +8,35 @@ from __future__ import annotations
 # --- Metadatos de la aplicacion ---
 # Nota: el branding TFM se mantiene en esta fase por instruccion explicita de no
 # introducir cambios visibles. Se retira en la Fase 5 (observacion 1 del tutor).
-APP_TITLE = "TFM - Carteras e Interfaz Inversor"
+APP_TITLE = "Carteras e Interfaz Inversor"
 
 # --- Parametros de mercado ---
 BENCHMARK_TICKER = "^STOXX50E"
 HISTORY_PERIOD = "5y"
 TRADING_DAYS_PER_YEAR = 252
+
+# --- Parametros CAPM fijos (Fase 5, Subfase 5.1).
+#     Antes de esta subfase, Rf y la prima de mercado eran inputs manuales del usuario en
+#     la Hoja 1 (st.number_input), lo que impedia reproducir exactamente el mismo resultado
+#     entre distintas ejecuciones o distintos evaluadores. Se fijan aqui como constantes
+#     unicas, consumidas sin cambios por `core.capm.capm_expected_return` (formula intacta:
+#     E[R] = Rf + beta*(Rm-Rf)).
+#
+#     Valores: referencias representativas del mercado europeo en la fecha de elaboracion
+#     del proyecto (no datos de mercado en vivo). Rf ~ deuda publica AAA/AA a medio plazo
+#     en la eurozona; Rm ~ retorno historico de largo plazo de renta variable europea. Se
+#     documentan explicitamente como supuesto metodologico (ver disclaimer mostrado en la
+#     Hoja 1 y en `docs/markowitz_metodologia.md`), no como una recomendacion de inversion. ---
+RISK_FREE_RATE = 0.023  # Rf anual = 2.3%
+MARKET_RETURN = 0.080  # Rm anual = 8.0%
+MARKET_RISK_PREMIUM = MARKET_RETURN - RISK_FREE_RATE  # Rm - Rf, consumido por core.capm
+
+CAPM_ASSUMPTIONS_DISCLAIMER = (
+    "Los valores utilizados corresponden a referencias representativas del mercado "
+    "europeo en la fecha de elaboración del proyecto. Se fijan para garantizar la "
+    "reproducibilidad de los resultados y no constituyen "
+    "una recomendación de inversión."
+)
 
 # --- Clases de activo (Fase 3): usadas por portfolio/constraints.py para las bandas
 #     minimas/maximas por perfil (ej. Conservador exige un piso de Renta Fija + Monetario).
