@@ -210,6 +210,16 @@ Los valores concretos (25/35/45) no proceden de una fórmula cerrada de la liter
 
 Estas bandas, y no un filtro de elegibilidad individual por Beta, son las que realmente diferencian las 3 carteras resultantes (ver limitación conocida en la sección 8).
 
+### Clasificación de riesgo por Beta (Hoja 3, informativa)
+
+La Beta se utiliza también para clasificar el comportamiento relativo de un activo respecto al mercado europeo, mostrado en la columna "Perfil de riesgo (Beta)" de la Hoja 3 (`core.capm.describe_beta_profile`, umbrales `config.BETA_RISK_LOWER_BOUND=0.80` / `config.BETA_RISK_UPPER_BOUND=1.20`):
+
+- **Beta < 0.80** — Activo de comportamiento defensivo.
+- **Beta entre 0.80 y 1.20** — Activo con comportamiento similar al mercado.
+- **Beta superior a 1.20** — Activo con mayor sensibilidad al mercado.
+
+**Esta clasificación no determina qué activos forman parte de la cartera óptima.** La construcción de la cartera depende exclusivamente del optimizador de Markowitz (sección 5) y de las restricciones de composición por perfil descritas arriba. Es una etiqueta puramente descriptiva del activo en sí mismo (no depende del perfil del inversor que la consulta), distinta y con umbrales distintos del criterio histórico de elegibilidad `core.capm.is_eligible_for_profile` (0.75/1.25), que tampoco participa en la optimización — ver limitación conocida en la sección 8.
+
 ## 7. Validaciones implementadas
 
 | Validación | Dónde | Qué comprueba |
@@ -224,7 +234,7 @@ Estas bandas, y no un filtro de elegibilidad individual por Beta, son las que re
 ## 8. Limitaciones conocidas
 
 - **La proyección de capital (Hoja 5) sigue aplicando una única tasa de rentabilidad esperada (la de la cartera completa) al capital total**, en vez de proyectar cada posición con su capital asignado y sumar los resultados año a año. Para horizontes de varios años, ambos cálculos divergen matemáticamente (promediar tasas y componer no es lo mismo que componer cada activo y sumar). Es una limitación heredada de fases anteriores, no introducida ni resuelta en la Fase 3; requiere una fase propia centrada en el modelo de proyección.
-- **El filtro de elegibilidad individual por Beta (`portfolio.constraints.is_asset_eligible_for_profile`) no se usa para preseleccionar el universo que recibe el optimizador.** Se comprobó en la Subfase 3.5 que, con los datos reales actuales, ningún activo de renta variable alcanza el umbral Beta ≥ 1.25 exigido para el perfil Agresivo (el máximo real es 1.2475): aplicar ese filtro habría dejado a "Agresivo" sin ninguna renta variable disponible. El umbral (heredado sin cambios desde el modelo original, nunca contrastado contra la distribución real de Betas del universo) queda documentado como candidato a recalibración en una fase futura. Mientras tanto, toda la diferenciación de riesgo por perfil la hacen las bandas de composición (sección 6), ya validadas como suficientes.
+- **El filtro de elegibilidad individual por Beta (`core.capm.is_eligible_for_profile` / `portfolio.constraints.is_asset_eligible_for_profile`) no se usa para preseleccionar el universo que recibe el optimizador.** Se comprobó en la Subfase 3.5 que, con los datos reales actuales, ningún activo de renta variable alcanza el umbral Beta ≥ 1.25 exigido para el perfil Agresivo (el máximo real es 1.2475): aplicar ese filtro habría dejado a "Agresivo" sin ninguna renta variable disponible. Toda la diferenciación de riesgo por perfil la hacen las bandas de composición (sección 6). Tras revisar esta situación con la tutoría del TFM, se decidió (Fase 5) NO recalibrar este umbral — la Beta se recalcula en cada sesión sobre una ventana móvil de 5 años, por lo que cualquier umbral absoluto de inclusión/exclusión queda desactualizado con el tiempo. En su lugar, la columna informativa de la Hoja 3 que dependía de este criterio se sustituyó por una clasificación descriptiva de riesgo sin relación de inclusión/exclusión (ver "Clasificación de riesgo por Beta" en la sección 6). La función se conserva sin cambios por compatibilidad, documentada como diseño histórico que ya no participa en la optimización.
 - **El modelo de retorno esperado (CAPM de un solo factor) aplica el mismo benchmark (Euro Stoxx 50) a activos de naturaleza muy distinta** (acciones bancarias europeas, un ETF de renta variable global, un ETF monetario). Es una simplificación estándar de un modelo CAPM de libro de texto, documentada aquí como supuesto metodológico, no como error.
 - **La tasa libre de riesgo y la prima de mercado son parámetros introducidos manualmente por el usuario**, no datos de mercado en tiempo real — razonable para fines pedagógicos, pero debe presentarse como "supuesto del usuario", no como "dato de mercado".
 
