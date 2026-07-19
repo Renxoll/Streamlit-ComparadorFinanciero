@@ -4,7 +4,9 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+import config
 from core.models import InvestorInputs
+from ui.components import format_percentage
 
 
 def render() -> InvestorInputs:
@@ -18,13 +20,17 @@ def render() -> InvestorInputs:
         edad = st.number_input("Edad:", min_value=18, max_value=100, value=34)
         importe = st.number_input("Importe a invertir (€):", min_value=1000, value=10000, step=500)
         plazo = st.number_input("Plazo (años):", min_value=1, max_value=30, value=5)
-        risk_free_rate = st.number_input("Tasa libre de riesgo anual (Rf):", value=0.0200, format="%.4f")
-        market_premium = st.number_input("Prima de riesgo de mercado (Rm - Rf):", value=0.0550, format="%.4f")
+
+        st.subheader("Parámetros de mercado (fijos)")
+        col_rf, col_rm = st.columns(2)
+        col_rf.metric("Tasa libre de riesgo anual (Rf)", format_percentage(config.RISK_FREE_RATE, decimals=1))
+        col_rm.metric("Rentabilidad de mercado anual (Rm)", format_percentage(config.MARKET_RETURN, decimals=1))
+        st.caption(config.CAPM_ASSUMPTIONS_DISCLAIMER)
 
         st.info(f"**Perfil calculado actual:** {st.session_state.perfil_calc}")
 
     with col2:
-        st.subheader("Diccionario Metodológico (TFM)")
+        st.subheader("Diccionario Metodológico")
         df_dicc = pd.DataFrame({
             "Campo": ["Nombre", "Edad", "Importe", "Plazo", "Rf", "Perfil"],
             "Uso en la interfaz": [
@@ -43,6 +49,6 @@ def render() -> InvestorInputs:
         edad=edad,
         importe=importe,
         plazo=plazo,
-        risk_free_rate=risk_free_rate,
-        market_premium=market_premium,
+        risk_free_rate=config.RISK_FREE_RATE,
+        market_premium=config.MARKET_RISK_PREMIUM,
     )
