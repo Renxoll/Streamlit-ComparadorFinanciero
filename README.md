@@ -1,4 +1,4 @@
-# 📊 Sistema de Recomendación y Optimización de Inversión (TFM)
+# 📊 Sistema de Recomendación y Optimización de Inversión
 **Máster Universitario en Ciencias Actuariales y Financieras (MUCAF) - Universidad de León**
 
 Una aplicación web interactiva desarrollada en Python que replica, automatiza y mejora el modelo actuarial diseñado para el Trabajo Fin de Máster. Orientada a la perfilación de riesgo (MiFID II), evaluación del riesgo sistemático y optimización de carteras de inversión centradas en el sector bancario y asegurador de la Unión Europea.
