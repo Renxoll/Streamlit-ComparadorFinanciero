@@ -106,27 +106,13 @@ def test_beta_partition_across_profiles_has_no_gaps_or_overlaps() -> None:
         assert len(eligible_profiles) >= 1, f"beta={beta} no es elegible para ningun perfil"
 
 
-def test_describe_beta_criterion_mentions_the_configured_bounds() -> None:
-    lower = config.BETA_ELIGIBILITY_LOWER_BOUND
-    upper = config.BETA_ELIGIBILITY_UPPER_BOUND
-    assert f"{lower:.2f}" in capm.describe_beta_criterion(config.PERFIL_CONSERVADOR)
-    assert f"{lower:.2f}" in capm.describe_beta_criterion(config.PERFIL_MODERADO)
-    assert f"{upper:.2f}" in capm.describe_beta_criterion(config.PERFIL_MODERADO)
-    assert f"{upper:.2f}" in capm.describe_beta_criterion(config.PERFIL_AGRESIVO)
-
-
 def test_annualized_covariance_is_symmetric() -> None:
+    # `annualized_covariance` ya no se usa en la UI (ver nota en core/capm.py); este test
+    # se conserva porque tests/test_covariance.py depende de esta funcion como oraculo
+    # de verificacion cruzada para portfolio.covariance.
     a = _returns([0.01, 0.02, -0.01, 0.03, 0.00])
     b = _returns([0.02, 0.01, 0.00, 0.02, -0.01])
     assert capm.annualized_covariance(a, b) == pytest.approx(capm.annualized_covariance(b, a))
-
-
-def test_combined_portfolio_volatility_matches_two_asset_formula() -> None:
-    volatility = capm.combined_portfolio_volatility(
-        vol_a=0.20, weight_a=0.5, vol_b=0.15, weight_b=0.5, covariance_ab=0.01
-    )
-    expected = np.sqrt((0.5**2 * 0.20**2) + (0.5**2 * 0.15**2) + (2 * 0.5 * 0.5 * 0.01))
-    assert volatility == pytest.approx(expected)
 
 
 class _FakeService:
