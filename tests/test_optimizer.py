@@ -102,7 +102,7 @@ def test_optimizer_raises_on_non_positive_semidefinite_covariance() -> None:
 #
 # `expected_returns` y `covariance_matrix` son la salida REAL de
 # `core.capm.build_universe_metrics` + `portfolio.covariance.build_annualized_covariance_matrix`
-# sobre `config.UNIVERSO_TFM` (Rf=0.02, prima=0.055, periodo=5y), capturada una unica vez.
+# sobre `config.UNIVERSO_ACTIVOS` (Rf=0.02, prima=0.055, periodo=5y), capturada una unica vez.
 # Se congela como constante para que la suite de tests siga siendo rapida y determinista
 # (sin ella, cada ejecucion de pytest dependeria de la disponibilidad de Yahoo Finance).
 _REAL_UNIVERSE_TICKERS = [
@@ -160,7 +160,7 @@ def test_optimizer_on_real_universe_concentrates_without_a_max_weight_constraint
 #
 # Mismo orden de tickers que en `_REAL_UNIVERSE_TICKERS`: 9 activos de renta
 # variable (7 acciones + 2 ETFs de renta variable), 1 ETF de renta fija, 1 ETF
-# monetario (ver config.UNIVERSO_TFM).
+# monetario (ver config.UNIVERSO_ACTIVOS).
 _REAL_UNIVERSE_ASSET_CLASSES = np.array(
     [config.CLASE_RENTA_VARIABLE] * 9 + [config.CLASE_RENTA_FIJA, config.CLASE_MONETARIO]
 )
