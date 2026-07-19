@@ -17,7 +17,14 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class InvestorInputs:
-    """Datos capturados en la Hoja 1 (datos del inversor)."""
+    """Datos capturados en la Hoja 1 (datos del inversor).
+
+    `risk_free_rate` y `market_premium` ya no son introducidos por el usuario
+    (Subfase 5.1): se completan con las constantes fijas `config.RISK_FREE_RATE`
+    y `config.MARKET_RISK_PREMIUM`, para que los resultados sean reproducibles
+    entre ejecuciones. El resto del sistema (`core.capm`, `portfolio.optimizer`)
+    sigue consumiendo estos dos campos exactamente igual que antes.
+    """
 
     nombre: str
     edad: int
