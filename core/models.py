@@ -27,7 +27,7 @@ class InvestorInputs:
     """
 
     nombre: str
-    edad: int
+    edad: int | None
     importe: float
     plazo: int
     risk_free_rate: float

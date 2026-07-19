@@ -16,8 +16,8 @@ def render() -> InvestorInputs:
 
     with col1:
         st.subheader("Parámetros de Entrada")
-        nombre = st.text_input("Nombre:", value="Jimena Triguero")
-        edad = st.number_input("Edad:", min_value=18, max_value=100, value=34)
+        nombre = st.text_input("Nombre:", value="")
+        edad = st.number_input("Edad:", min_value=18, max_value=100, value=None)
         importe = st.number_input("Importe a invertir (€):", min_value=1000, value=10000, step=500)
         plazo = st.number_input("Plazo (años):", min_value=1, max_value=30, value=5)
 
