@@ -9,7 +9,7 @@ recibio, cuanto aporto a la puntuacion final) ademas de la etiqueta de
 perfil.
 
 Ver `docs/perfil_inversor_metodologia.md` para la explicacion metodologica
-completa, con ejemplos de calculo, pensada para incorporarse al TFM.
+completa, con ejemplos de calculo.
 """
 from __future__ import annotations
 

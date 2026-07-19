@@ -1,7 +1,6 @@
 # 📊 Sistema de Recomendación y Optimización de Inversión
-**Máster Universitario en Ciencias Actuariales y Financieras (MUCAF) - Universidad de León**
 
-Una aplicación web interactiva desarrollada en Python que replica, automatiza y mejora el modelo actuarial diseñado para el Trabajo Fin de Máster. Orientada a la perfilación de riesgo (MiFID II), evaluación del riesgo sistemático y optimización de carteras de inversión centradas en el sector bancario y asegurador de la Unión Europea.
+Una aplicación web interactiva desarrollada en Python que automatiza un modelo actuarial de perfilación de riesgo (MiFID II), evaluación del riesgo sistemático y optimización de carteras de inversión centradas en el sector bancario y asegurador de la Unión Europea.
 
 ## 🧠 Arquitectura Lógica del Sistema (Perfilado y Scoring)
 
@@ -32,9 +31,9 @@ La aplicación está estructurada exactamente en **6 fases (pestañas)** secuenc
 4. **Análisis M1-M7 y Cartera Conjunta:** Selección automatizada del activo ganador por sector (Banco y Aseguradora) según el Score. Permite simular el cruce de pesos porcentuales y calcular la rentabilidad, el riesgo y el Ratio de Sharpe de la cartera combinada.
 5. **Gráficos y Proyección:** Cálculo de capitalización compuesta del capital invertido desde $t=0$ hasta el año límite del horizonte temporal. Visualización gráfica del desempeño de la cartera híbrida frente a los activos individuales.
 6. **Resumen de Interfaz y Exportación:** Dashboard ejecutivo con las resoluciones metodológicas del algoritmo.
-   - **Exportación a PDF:** Generación dinámica de la Ficha de Recomendación Oficial, lista para anexar a la memoria del TFM.
+   - **Exportación a PDF:** Generación dinámica de la Ficha de Recomendación Oficial.
 
-🛡️ **Blindaje Anti-Fallos (Fallback System):** Sistema de seguridad programado para la defensa del máster. Si el ordenador carece de conexión a internet o la API de Yahoo Finance deniega la petición durante la presentación, el sistema adopta instantáneamente los valores actuariales estáticos pre-calculados en el modelo original, asegurando un funcionamiento ininterrumpido.
+🛡️ **Blindaje Anti-Fallos (Fallback System):** Sistema de seguridad ante caídas de conexión. Si el ordenador carece de conexión a internet o la API de Yahoo Finance deniega la petición, el sistema adopta instantáneamente los valores actuariales estáticos pre-calculados en el modelo original, asegurando un funcionamiento ininterrumpido.
 
 ## 🛠️ Stack Tecnológico
 

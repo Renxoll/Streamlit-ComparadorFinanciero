@@ -54,10 +54,10 @@ def render(investor: InvestorInputs, allocation: PortfolioAllocation) -> None:
 
     with col_pdf:
         st.write("### Exportación Documental")
-        st.write("Genera el acta oficial de resultados para incorporar como anexo en la memoria del TFM.")
+        st.write("Genera el acta oficial de resultados de la recomendación de inversión.")
         st.download_button(
             label="📥 Descargar Ficha de Resultados (PDF)",
             data=build_summary_pdf(df_resumen_card),
-            file_name="Resumen_Ejecutivo_TFM.pdf",
+            file_name="Resumen_Ejecutivo.pdf",
             mime="application/pdf",
         )
