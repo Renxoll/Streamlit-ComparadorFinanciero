@@ -7,7 +7,7 @@ cada archivo ni depender de la red al ejecutar la suite.
 
 Generado una única vez a partir de `core.capm.build_universe_metrics` +
 `portfolio.covariance.build_annualized_covariance_matrix` sobre
-`config.UNIVERSO_TFM` (Rf=0.02, prima=0.055, período=5y).
+`config.UNIVERSO_ACTIVOS` (Rf=0.02, prima=0.055, período=5y).
 """
 from __future__ import annotations
 

@@ -37,7 +37,7 @@ def render() -> InvestorInputs:
                 "Identificación del usuario", "Apoyo al perfil inversor", "Capital inicial",
                 "Horizonte temporal", "Activo libre de riesgo", "Resultado cuestionario",
             ],
-            "Relación con el TFM": [
+            "Relación con la metodología": [
                 "Pantalla inicial", "MiFID II / idoneidad", "Proyección de valor futuro",
                 "Selección de activos", "Ratio de Sharpe", "Recomendación de cartera",
             ],

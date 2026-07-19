@@ -18,7 +18,7 @@ El sistema original (y su primera refactorización, Fases 1-2) seleccionaba la c
 
 ### Por qué fue sustituido
 
-Porque una recomendación de cartera que no está optimizada, que ignora el perfil de riesgo real del usuario y que no puede diversificar entre clases de activo no es defendible ni como producto ni como metodología de TFM. La Fase 3 sustituye la heurística por un optimizador de Markowitz real, con restricciones dependientes del perfil y un universo que permite diversificación genuina.
+Porque una recomendación de cartera que no está optimizada, que ignora el perfil de riesgo real del usuario y que no puede diversificar entre clases de activo no es defendible ni como producto ni como metodología. La Fase 3 sustituye la heurística por un optimizador de Markowitz real, con restricciones dependientes del perfil y un universo que permite diversificación genuina.
 
 ## 2. Arquitectura
 
