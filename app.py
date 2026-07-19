@@ -31,8 +31,23 @@ from ui.sections import (
 
 st.set_page_config(page_title=config.APP_TITLE, layout="wide")
 
-st.title("Sistema de Recomendación y Optimización de Inversión (TFM)")
+st.title("Sistema de Recomendación y Optimización de Inversión")
 st.caption("Máster Universitario en Ciencias Actuariales y Financieras (MUCAF) - Universidad de León")
+
+# --- Control de simulación (Subfase 5.1) ---
+# Streamlit persiste `session_state` (y el valor de los widgets, aunque no tengan `key`
+# explicita) durante toda la sesion del navegador, incluido un simple recargo de pagina
+# (F5) que reutiliza la misma sesion. Sin un control explicito, un evaluador que recarga
+# la app para "empezar de cero" seguiria viendo los datos de la simulacion anterior. Este
+# boton es la correccion minima: borra TODO `session_state` (datos de Hoja 1 y Hoja 2) y
+# fuerza un rerun, tras el cual los widgets vuelven a sus valores `value=`/`index=` por
+# defecto. No afecta a la cache de datos de mercado (`st.cache_data`): esa cache no son
+# "datos del inversor", y conservarla evita descargas innecesarias de Yahoo Finance.
+with st.sidebar:
+    st.subheader("Control de simulación")
+    if st.button("🔄 Nueva simulación", help="Borra todos los datos introducidos y reinicia la aplicación con los valores por defecto."):
+        st.session_state.clear()
+        st.rerun()
 
 # --- Inicialización de memoria de sesión ---
 if "perfil_calc" not in st.session_state:
