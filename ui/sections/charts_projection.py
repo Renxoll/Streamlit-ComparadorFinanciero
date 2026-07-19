@@ -1,19 +1,22 @@
 """Hoja 5: proyección y gráficos de la cartera optimizada.
 
 Adaptada en la Subfase 3.5 para consumir `PortfolioAllocation` (N activos)
-en vez de la antigua heurística de 2 activos (`MarkowitzSelection`). No se
-recalcula nada nuevo: se reutiliza `core.projections.project_compound_growth`
-(sin cambios desde la Fase 1) sobre el capital y la rentabilidad esperada
-YA calculados por `portfolio.allocation.build_portfolio_allocation`.
+en vez de la antigua heurística de 2 activos (`MarkowitzSelection`).
 
-Limitación conocida, heredada y NO resuelta en esta subfase: la proyección
-sigue aplicando una única tasa (la rentabilidad esperada agregada de la
-cartera) al capital total, en vez de proyectar cada posición con su capital
-asignado y sumar los resultados — matemáticamente más correcto para
-horizontes de varios años (observación 7 del tutor, señalada desde la
-auditoría inicial). Esa corrección requiere una fase propia centrada en el
-modelo de proyección; no forma parte del alcance de "integrar el
-optimizador en la UI".
+Subfase 4.4: la proyección usa `core.projections.project_portfolio_by_asset`,
+que compone CADA posición con su propio capital asignado y su propia
+rentabilidad esperada, y suma los resultados — sustituye a la aproximación
+anterior (una única tasa blended aplicada al capital total), que la Subfase
+4.3 demostró matemática y empíricamente que subestima el capital proyectado
+de forma creciente con el horizonte (hasta ~30% a 30 años en los datos
+auditados). Ningún cálculo se duplica: el capital y la rentabilidad de cada
+posición ya estaban calculados por `portfolio.allocation.build_portfolio_allocation`.
+
+Supuesto financiero de esta proyección (documentado explícitamente, tal como
+se acordó al aprobar la Subfase 4.3): cartera BUY & HOLD — cada posición
+compone de forma independiente, SIN rebalanceo periódico a los pesos
+iniciales. Un modelo con rebalanceo periódico daría un resultado distinto
+y queda fuera del alcance de esta subfase.
 """
 from __future__ import annotations
 
@@ -21,7 +24,7 @@ import pandas as pd
 import streamlit as st
 
 from core.models import InvestorInputs
-from core.projections import project_compound_growth
+from core.projections import project_portfolio_by_asset
 from portfolio.allocation import PortfolioAllocation
 from ui.components import format_decimal, format_percentage
 
@@ -31,7 +34,8 @@ def render(investor: InvestorInputs, allocation: PortfolioAllocation) -> None:
     st.header("HOJA 5: VISUALIZACIÓN DE RESULTADOS")
 
     anios = list(range(int(investor.plazo) + 1))
-    proyeccion = project_compound_growth(allocation.total_capital, allocation.expected_return, investor.plazo)
+    posiciones = [(entry.allocated_capital, entry.expected_return) for entry in allocation.entries]
+    proyeccion = project_portfolio_by_asset(posiciones, investor.plazo)
     df_proyeccion = pd.DataFrame({"Año": anios, "Cartera optimizada": proyeccion})
 
     col_tabla_proy, col_indicadores = st.columns([1.3, 1.7])
@@ -41,6 +45,10 @@ def render(investor: InvestorInputs, allocation: PortfolioAllocation) -> None:
         st.dataframe(
             df_proyeccion.style.format({"Cartera optimizada": "{:,.2f} €"}),
             hide_index=True,
+        )
+        st.caption(
+            "Proyección *buy & hold*: cada posición compone de forma independiente a su "
+            "propia rentabilidad esperada, sin rebalanceo periódico a los pesos iniciales."
         )
 
     with col_indicadores:
