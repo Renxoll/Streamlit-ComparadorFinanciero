@@ -39,6 +39,7 @@ def render() -> None:
     st.session_state.perfil_calc = result.profile
 
     st.divider()
+    st.metric("Resultado del cuestionario", f"{result.total_score:.2f} / {MAX_TOTAL_SCORE:.2f}")
     st.success(f"Perfil asignado: **{result.profile.upper()}**")
 
     with st.expander("Ver desglose completo del cálculo (trazabilidad por dimensión)"):
