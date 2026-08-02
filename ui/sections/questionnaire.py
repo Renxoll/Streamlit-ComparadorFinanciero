@@ -41,11 +41,6 @@ def render() -> None:
     st.divider()
     st.success(f"Perfil asignado: **{result.profile.upper()}**")
 
-    if result.strengths:
-        st.write("**Fortalezas detectadas:**")
-        for strength in result.strengths:
-            st.write(f"- {strength}")
-
     with st.expander("Ver desglose completo del cálculo (trazabilidad por dimensión)"):
         st.dataframe(
             {
