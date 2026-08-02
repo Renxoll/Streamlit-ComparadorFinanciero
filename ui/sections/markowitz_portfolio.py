@@ -57,6 +57,28 @@ def render(
     )
 
     profile_constraints = get_constraints_for_profile(investor_profile)
+
+    with st.expander("¿Cómo se calcula esta cartera?"):
+        st.markdown(
+            f"- **Rentabilidad esperada de cada activo**: se calcula con el modelo CAPM a partir "
+            f"de la tasa libre de riesgo (Rf = {format_percentage(config.RISK_FREE_RATE, decimals=1)}), "
+            f"la rentabilidad de mercado (Rm = {format_percentage(config.MARKET_RETURN, decimals=1)}) "
+            "y la Beta histórica propia de cada activo (ver Hoja 3).\n"
+            "- **Cómo se reparten los pesos**: el optimizador busca la combinación de pesos que "
+            "maximiza el Ratio de Sharpe de la cartera COMPLETA (no de cada activo por separado), "
+            "considerando a la vez la rentabilidad esperada, la volatilidad y cómo se correlaciona "
+            "cada activo con el resto.\n"
+            f"- **Por qué un activo recibe un peso concreto**: dentro de esa búsqueda conjunta, un "
+            "activo con mejor relación rentabilidad/riesgo y baja correlación con los demás tiende a "
+            f"recibir más peso, hasta el máximo permitido para tu perfil "
+            f"({format_percentage(profile_constraints.max_weight_per_asset, decimals=0)} por activo, "
+            f"con un mínimo de {format_percentage(profile_constraints.min_fixed_income_weight, decimals=0)} "
+            "en renta fija/monetario).\n"
+            "- **Del peso al capital asignado**: el importe de cada posición es, simplemente, "
+            "`peso × capital total invertido` — repartido en céntimos exactos para que la suma "
+            "coincida siempre con tu importe."
+        )
+
     tickers = tuple(universe_metrics[config.COL_TICKER])
     covariance_matrix = _cached_covariance_matrix(tickers, config.HISTORY_PERIOD)
     expected_returns = universe_metrics[config.COL_CAPM].to_numpy()
