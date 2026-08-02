@@ -49,22 +49,6 @@ def render() -> None:
         for strength in result.strengths:
             st.write(f"- {strength}")
 
-    col_risk_up, col_risk_down = st.columns(2)
-    with col_risk_up:
-        st.write("**Factores que aumentan el riesgo recomendado:**")
-        if result.risk_increasing_factors:
-            for factor in result.risk_increasing_factors:
-                st.write(f"- {factor}")
-        else:
-            st.caption("Ninguno detectado.")
-    with col_risk_down:
-        st.write("**Factores que reducen el riesgo recomendado:**")
-        if result.risk_decreasing_factors:
-            for factor in result.risk_decreasing_factors:
-                st.write(f"- {factor}")
-        else:
-            st.caption("Ninguno detectado.")
-
     with st.expander("Ver desglose completo del cálculo (trazabilidad por dimensión)"):
         st.dataframe(
             {
