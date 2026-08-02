@@ -1,0 +1,21 @@
+# Orquestacion para ejecutar la app con un unico comando (`docker compose up`),
+# sin instalar Python ni dependencias en la maquina host. Compatible con
+# Docker Desktop en Windows, macOS y Linux (sin configuracion especifica de SO).
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: comparador-financiero-tfm:latest
+    ports:
+      - "8501:8501"
+    # Carga variables desde .env SOLO si el archivo existe (required: false,
+    # soportado desde Docker Compose v2.24+). El proyecto no necesita ninguna
+    # variable de entorno para funcionar hoy (no usa .env en el codigo, ver
+    # README_DOCKER.md); esto deja el mecanismo listo para el dia en que haga
+    # falta (proxy para yfinance, zona horaria, etc.) sin romper `docker
+    # compose up` si el archivo no existe.
+    env_file:
+      - path: ./.env
+        required: false
+    restart: unless-stopped
