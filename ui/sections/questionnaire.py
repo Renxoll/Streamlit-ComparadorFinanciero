@@ -39,10 +39,7 @@ def render() -> None:
     st.session_state.perfil_calc = result.profile
 
     st.divider()
-    col_res1, col_res2 = st.columns(2)
-    col_res1.metric("Puntuación ponderada", f"{result.total_score:.2f} / {MAX_TOTAL_SCORE:.2f}")
-    col_res2.success(f"Perfil asignado: **{result.profile.upper()}**")
-    st.info(result.explanation)
+    st.success(f"Perfil asignado: **{result.profile.upper()}**")
 
     if result.strengths:
         st.write("**Fortalezas detectadas:**")
