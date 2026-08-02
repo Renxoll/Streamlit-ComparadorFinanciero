@@ -1,0 +1,45 @@
+# Control de versiones e IDE
+.git/
+.gitignore
+.idea/
+.claude/
+.devcontainer/
+
+# Cachés de Python / herramientas de desarrollo
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Entornos virtuales (nunca deben copiarse; las dependencias se instalan
+# dentro de la imagen a partir de requirements.txt)
+.venv/
+venv/
+env/
+
+# Tests y documentacion: no los usa la aplicacion en ejecucion (app.py no los
+# importa), solo aumentarian el tamano de la imagen de produccion.
+tests/
+docs/
+requirements-dev.txt
+README.md
+
+# Archivos temporales / logs locales
+*.log
+*.tmp
+.DS_Store
+
+# Artefactos de Docker (evita que un build anterior se copie a si mismo)
+Dockerfile
+.dockerignore
+docker-compose.yml
+README_DOCKER.md
+
+# Variables de entorno: NUNCA deben incluirse dentro de la imagen (se inyectan
+# en tiempo de ejecucion via docker-compose/env_file, no en build time).
+.env
+.env.*
+!.env.example
