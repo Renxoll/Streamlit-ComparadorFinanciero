@@ -5,3 +5,6 @@ __pycache__/
 .idea/
 .venv/
 venv/
+
+# Variables de entorno locales (Docker): la plantilla .env.example si se versiona.
+.env
