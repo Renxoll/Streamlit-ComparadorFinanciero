@@ -31,7 +31,7 @@ def render(investor: InvestorInputs, allocation: PortfolioAllocation) -> None:
     numero_posiciones = sum(1 for entry in allocation.entries if entry.weight > 0)
 
     df_resumen_card = pd.DataFrame({
-        "Concepto Metodológico": [
+        "Concepto": [
             "Usuario", "Perfil inversor", "Universo analizado",
             "Número de activos en el universo", "Número de posiciones en cartera",
             "Modelo de rentabilidad", "Modelo de optimización", "Restricciones aplicadas",
