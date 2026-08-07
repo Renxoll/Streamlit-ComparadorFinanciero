@@ -46,9 +46,19 @@ El proyecto está construido íntegramente en Python utilizando las siguientes l
 * **[FPDF2](https://pyfpdf.github.io/fpdf2/):** Construcción estructurada y exportación del reporte ejecutivo en formato `.pdf`.
 * **[Certifi](https://pypi.org/project/certifi/):** Gestión de certificados SSL para garantizar la resolución y autorización de peticiones web hacia la API financiera.
 
+## 🐳 Ejecución con Docker (recomendado)
+
+La forma más rápida de levantar la aplicación es con [Docker Desktop](https://www.docker.com/products/docker-desktop/), sin instalar Python ni ninguna dependencia manualmente:
+
+```bash
+docker compose up --build
+```
+
+Después, abre [http://localhost:8501](http://localhost:8501). Instrucciones completas (requisitos, variables de entorno, cómo detener y reconstruir) en [README_DOCKER.md](README_DOCKER.md).
+
 ## 💻 Instalación y Ejecución Local
 
-Sigue estos pasos para levantar la aplicación en tu entorno de desarrollo:
+Alternativamente, para ejecutar la aplicación directamente con Python (sin Docker), sigue estos pasos:
 
 **1. Clonar o descargar el proyecto**
 Asegúrate de tener el archivo `app.py` (o `main.py`) guardado en tu directorio de trabajo.
