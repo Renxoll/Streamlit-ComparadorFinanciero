@@ -19,7 +19,7 @@ def build_summary_pdf(summary_df: pd.DataFrame) -> bytes:
 
     pdf.set_font("Helvetica", "", 10)
     for _, row in summary_df.iterrows():
-        concepto = str(row["Concepto Metodológico"]).encode("latin-1", "replace").decode("latin-1")
+        concepto = str(row["Concepto"]).encode("latin-1", "replace").decode("latin-1")
         valor = str(row["Valor Asignado"]).encode("latin-1", "replace").decode("latin-1")
         pdf.set_font("Helvetica", "B", 10)
         pdf.cell(75, 8, concepto, border=1)
